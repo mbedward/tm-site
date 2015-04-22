@@ -1,25 +1,19 @@
+#' For a given parameter set, identified by its integer ID, finds the number 
+#' of runs in which each modelled species was extant at a specified time. 
+#'
+#' @param tmdb an open database connection
+#' @param paramSetID identifier of the parameter set to query
+#' @param time the simulation time to query
+#' 
+#' @return A list with the following elements: 
+#'   paramSetID (parameter set identifier); 
+#'   numRuns (number of runs found for the parameter set);
+#'   time (query time);
+#'   data (a `data.frame` with columns spID, name, runs.extant, prop)
+#'
+#' @export
+#' 
 tmdbGetExtant <- function(tmdb, paramSetID, time) {
-#
-# For a given parameter set, identified by its integer ID, this function finds the number 
-# of runs in which each modelled species is extant at the specified time. 
-#
-# Arguments:
-#
-# tmdb - an open database connection
-#
-# paramSetID - the parameter set to query
-#
-# time - the simulation time to query
-#
-# Results are returned as a list with the following elements:
-#
-# paramSetID - parameter set queried
-#
-# numRuns - number of runs that were found for the parameter set
-#
-# time - time queried
-# 
-# data - a data.frame with columns: spID, name, runs.extant, prop
 
   if (!tmdbValidate( tmdb, show=FALSE )) {
     return(invisible(NULL)) 

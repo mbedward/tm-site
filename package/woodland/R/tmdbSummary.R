@@ -1,5 +1,17 @@
+#' Generate a summary of the contents of a tm.site output database.
+#' 
+#' @param tmdb an open database connection
+#' 
+#' @return a `data.frame` of summary data describing the simulation parameters
+#' 
+#' @examples
+#' \dontrun{
+#' con <- tmdbOpen("results.db")
+#' dat <- tmdbSummary(con)
+#' tmdbClose(con)
+#' }
+#' 
 tmdbSummary <- function(tmdb) {
-# Prints the summary of the contents of a tm.site results database
 
   if (!require(RSQLite, quietly=TRUE)) {
     stop("Can't load the RSQLite package or one of its dependents")

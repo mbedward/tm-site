@@ -1,108 +1,46 @@
-tm.site.sqlite <- function (SpeciesParams, 
-                            initial.cohorts, 
-                            rain, 
-                            scheduled.fires = NULL, 
-                            fire.func = function(flam.prop, fire) fire,
-                            overlap.matrix = 0, 
-                            ov.gen = 0, 
-                            recruitment = TRUE, 
-                            thinning = NULL, 
-                            special = NULL, 
-                            seedling.survival = NULL, 
-                            session.settings = NULL, 
-                            database = NULL ) 
+#' Simulates dynamics of a woodland stand.
+#' 
+#' \code{tm.site} simulates the dynamics of cohorts of one or more tree species
+#' in a woodland stand. For each cohort the simulation tracks annual values of
+#' age, number of trees, height, plus a set of morphometrics derived from height
+#' such as DBH and canopy radius. The location of individual trees is not
+#' explicitly modelled. The stand environment is defined by input vectors for
+#' annual rainfall and fire occurrence / intensity. The simulation period is
+#' equal to the length of the rainfall vector.
+#' 
+#' The order of events in each year of the simulation is:
+#' \enumerate{
+#'   \item Optional special actions (coppice ON)
+#'   \item Optional thinning of trees
+#'   \item Growth of trees (uniform within cohort)
+#'   \item Survival (adjustment of numbers within cohorts)
+#'   \item Recruitment (addition of new cohorts)
+#'   \item Fire (possible mortality and reduction of tree height)
+#'   \item Report cohort statistics
+#' }
+#'
+#' @param Spp either a single object or a \code{list} of objects
+#'   of class \code{\linkS4class{SpeciesParams}} defining one or more species
+#' 
+#' @export
+#' 
+tm.site <- function (Spp, 
+                     initial.cohorts, 
+                     rain, 
+                     scheduled.fires=NULL, 
+                     fire.func=NULL, 
+                     fire.canopy.func=NULL, 
+                     fire.early.prob=0,
+                     overlap.matrix=0, 
+                     ov.gen=0, 
+                     recruitment=TRUE, 
+                     thinning=NULL, 
+                     special=NULL, 
+                     seedling.survival=NULL, 
+                     session.settings=NULL, 
+                     database=NULL )
 {
-  #tm.site
-  
-  # eg tm.site(list(callitris.params, euc.params), test.cohorts, rainvec, recruitment=TRUE)
-  #
-  # The simulation period is equal to the length of the rain vector.
-  #
-  # ORDER OF EVENTS:
-  # (1) Preparatory stuff
-  #     yearly loop starts ->
-  # (2) Special Actions (coppice ON)
-  # (3) Thinning Treatments
-  # (4) Prepare Tree Variables
-  # (5) Growth (coppice OFF)
-  # (6) Survival
-  # (7) Recruitment
-  # (8) Fire (adjust survival; adjust height; coppice ON)
-  # (9) Report
-  #     -> yearly loop ends
-  # (10) Assemble results
-  #
-  # The argument scheduled.fires is a vector of scheduled fire intensities with 0 meaning no fire and 
-  # length=length(rain). If the scheduled.fires arg is not provided this is interpreted as no fires.
-  # The argument fire.func is a function that calculates realised fire intensity from scheduled fire intensity,
-  # and flammable proportion (ie. the function you provide must look like f( prop, scheduled intens) and
-  # realised intensity is returned. 
-  #
-  # The argument recruitment is either a boolean value indicating whether any recruitment
-  # will be modelled, or a vector of boolean values indicating possibility of recruitment
-  # for each year of the simulation.
-  #
-  # The thinning argument is a matrix with the following cols:
-  #   year
-  #   species.id
-  #   min.height
-  #   max.height
-  #   num.trees
-  #
-  # Each row specifies that, for a given species (or all if NA) in a given year, the number of trees 
-  # with height: min.height < h <= max.height is to be reduced to the value of num.trees.
-  # Where there are multiple cohorts in the height range, culling of trees is done evenly
-  # across cohorts by, for each cohort: new.n <- round( n * num.trees / n.total )
-  # 
-  # The 'special' argument is a data.frame that prescribes treatments for given cohorts.  The
-  # cohorts must be part of the initial stand specified in the Cohorts argument (see above).
-  # The data.frame has the the following cols:
-  #   cohort.id  - an integer corresponding to the row for this cohort in the Cohorts matrix
-  #   year       - (integer) year when the treatment is to be applied
-  #   action     - (character) one of "remove", "cut", "protect" (may be abbreviated)
-  #   value      - (numeric) if action = "cut" this is the new height of the cohort;
-  #                else if action = "protect" a non-zero value means protect cohort while
-  #                a zero value means remove protection
-  #
-  #
-  # A cohort may be listed more than once.  For example, this...
-  #
-  #   cohort.id  year  action  value
-  #           3    10     cut    1.5 
-  #           3    10     pro      1
-  #           3   100     rem     NA
-  #
-  # ...means reduce trees in cohort 3 to 1.5m in height and ensure that they survive
-  # until year 100, at which time they are removed.
-  #
-  # Actions specified in the 'special' matrix are carried out at the beginning of the simulation year. The Special 
-  # actions arg was originally added to apply known actions to Lunt et al (2006) pre-settlement trees. Special 
-  # actions may be useful in other applications as well. In general the special action "cut" is not appropriate for 
-  # Callitris, as it results in the tree surviving in the first instance, but being treated as a seedling of the cut 
-  # height, which is not really what Callitris does (it generally dies when cut), so it is best to do the "remove"  
-  # action for Callitris. Also note that in a situation where a fire occurs in the same year as a special action cut, 
-  # if a tree does not coppice when cut, but then does coppice when burnt, the former height recorded is the cut 
-  # height (plus that year's growth) and not the actual former height in the previous year. This is reasonable given 
-  # that if a tree is cut and then burnt in the same year, it is likely to have a lower survival and growth rate 
-  # than you might have expected for a tree that coppiced post-fire without having been first cut. However, if the 
-  # tree coppices twice in the same year (first when cut, then when burnt), the former height is the previous 
-  # year's height). This slight discrepancy was not thought serious enough to fix, but note that it exists.
-  #
-  # The overlap.matrix is a grid of pair-wise overlap values used in calculations of core area for recruitment 
-  # under asymmetric competition (where species exert different competitive influences on conspecific seedlings 
-  # vs seedlings of other species). The matrix must have column and row names corresponding exactly to the 
-  # species name parameter values in SpeciesParams. It must have all the species in SpeciesParams, but doesn't 
-  # matter if it has additional species not in SpeciesParams, or if the order is different to SpeciesParams, as 
-  # the script uses 'match' to look up the correct values. Also, the matrix must be arranged with the rows 
-  # equalling the seedling response, and the columns equalling the overstorey (existing cohort) effects. For 
-  # e.g. cell [1,2] has rowname "Callitris" and colname "Eucalyptus". It therefore contains the ov value used 
-  # to calculate the effect of existing Eucalyptus cohorts on potential Callitris seedlings. 
-  
-  # The ov.gen parameter is a general overlap value (default = 0) used in 2 places: to calculate flammable 
-  # proportion of the stand in fire years, and to report in the outputs a general core.area value for each 
-  # cohort, plus a combined general core area. SHOULD OV = 0 ALWAYS FOR FLAMMABLE AREA ???
-  #
-  
+
   # Programming notes
   # 
   # The following hacks are used to speed up simulations:
@@ -139,12 +77,12 @@ tm.site.sqlite <- function (SpeciesParams,
   # ====================================================================================
   
   ARG.INFO <- data.frame(
-    arg.name = c("initial.cohorts", "rain", "scheduled.fires", "fire.func", "thinning", "special", "seedling.survival", "overlap.matrix"),
+    arg.name = c("initial.cohorts", "rain", "scheduled.fires", "fire.func", "fire.canopy.func", "fire.early.prob",
+                 "thinning", "special", "seedling.survival", "overlap.matrix"),
     is.expr = FALSE,
     obj.name = "",
-    row.names = c("init", "rain", "fire", "fireFunc", "thinning", "special", "seedSurv", "overlap"),
+    row.names = c("init", "rain", "fire", "fireFunc", "fireCanopyFunc", "fireEarlyProb", "thinning", "special", "seedSurv", "overlap"),
     stringsAsFactors = FALSE)
-  
   
   for (i in 1:nrow(ARG.INFO)) {
     obj <- get(ARG.INFO$arg.name[i])
@@ -168,43 +106,56 @@ tm.site.sqlite <- function (SpeciesParams,
   }
   
   # ====================================================================================
-  #  Examine the SpeciesParams arg to check if it is a 'naked' param object or a list
-  #  of one or more objects
+  #  If the spp argument is a single SpeciesParams object, wrap it in a list for
+  #  consistency between single and multi-species runs.
   # ====================================================================================
   
-  nms <- names(SpeciesParams)
-  if ( !is.null(nms) ) {
-    # At the moment we just do a quick and dirty check by looking for
-    # a sample of expected names
-    if ( all(c("name", "survival.prob", "survival.rainfall.pars", "growth.rate", "height.yr1") %in% nms) ) {
-      # we have a naked params object - wrap it in a list
-      SpeciesParams <- list(SpeciesParams)
-    }
+  if ( is(Spp, "SpeciesParams") ) {
+      Spp <- list(Spp)
   }
   
   
   # ====================================================================================
-  #  Constants
+  #  Constants, global variables and frequently accessed bits
   # ====================================================================================
   
   # This will be initialized in the WriteMetadata function but we define it here
   # so that it doesn't end up being <<-'d into the global environment
   RUNID <- NA
   
-  NUM.SPP <- length(SpeciesParams)
+  CELL.AREA <- 10000
+  
+  NUM.SPP <- length(Spp)
   SP.NAMES <- character(NUM.SPP)
   for (i in 1:NUM.SPP) {
-    SP.NAMES[i] <- SpeciesParams[[i]]$name
+    SP.NAMES[i] <- Spp[[i]]@name
   }
   
   HAS.HT.DBH.PARS <- logical(NUM.SPP)
-  for (i in 1:NUM.SPP) HAS.HT.DBH.PARS[i] <- !is.null(SpeciesParams[[i]]$ht.dbh.pars)
-  
-  HAS.EXTERNAL.SEED.FUNC <- logical(NUM.SPP)
-  for (i in 1:NUM.SPP) HAS.EXTERNAL.SEED.FUNC[i] <- !is.null( SpeciesParams[[i]]$external.seed.func )
+  for (i in 1:NUM.SPP) HAS.HT.DBH.PARS[i] <- !is.null(Spp[[i]]@ht_dbh_pars)
+    
+  HAS.EXTERNAL.SEED.FUNC <- lapply(Spp, 
+                                   function(sp) hasFunction(sp, "external_seed_fn"))
   
   # all species flag
   EXTERNAL.SEED <- any(HAS.EXTERNAL.SEED.FUNC)
+  
+  RECRUIT.CANOPY.FUNC <- vector("list", length=NUM.SPP)
+  for (i in 1:NUM.SPP) {
+    sp <- Spp[[i]]
+    RECRUIT.CANOPY.FUNC[[i]] <- getFunctionOrElse(sp, "recruit_canopy_fn", identity)
+  }
+  
+  NON.FLAMMABILITY <- numeric(NUM.SPP)
+  for ( spID in 1:NUM.SPP ) NON.FLAMMABILITY[ spID ] <- Spp[[spID]]$non.flammability
+  
+  if (is.null(fire.func)) {
+    fire.func <- function(flam.prop, intensity) { intensity }
+  }
+  
+  if (is.null(fire.canopy.func)) {
+    fire.canopy.func <- function(area) { area }
+  }
   
   # Cohorts matrix cols (only cols 2 - 5 are in the matrix of initial cohorts
   # provided by the user)
@@ -216,8 +167,6 @@ tm.site.sqlite <- function (SpeciesParams,
   colGeneralCoreArea <- colFirstCoreArea + NUM.SPP
   
   NUM.COHORTS.COLS <- colGeneralCoreArea
-  
-  cell.area <- 10000
   
   # Previously we created a CohortSummary data.frame and expanded this one row at a time
   # as cohorts were added during the simulation. This is a slow operation in R so now
@@ -235,7 +184,7 @@ tm.site.sqlite <- function (SpeciesParams,
   
   
   # ====================================================================================
-  # Reformatting of parameters for increased speed
+  # SQL INSERT statement for writing cohort data
   # ====================================================================================
   
   SQL.WriteCohortData <-
@@ -344,7 +293,8 @@ tm.site.sqlite <- function (SpeciesParams,
                      "RunID INTEGER REFERENCES runs(ID),",
                      "Time INTEGER,",
                      "ResourceUse REAL,", 
-                     paste(names(combined.core.area), "REAL,", collapse=" "), 
+                     "CoreAreaGeneral REAL,",
+                     "MergedArea REAL,",
                      "Rain REAL,", 
                      "ScheduledFires REAL,", 
                      "RealisedFires REAL,", 
@@ -368,11 +318,13 @@ tm.site.sqlite <- function (SpeciesParams,
                      "InitialCohorts TEXT,",
                      "Rain TEXT,",
                      "Fire TEXT,",
-                     "FireFunc,",
-                     "Thinning,",
-                     "Special,",
-                     "SeedSurv,",
-                     "OverlapMatrix )"))
+                     "FireFunc TEXT,",
+                     "FireCanopyFunc TEXT,",
+                     "FireEarlyProb TEXT,",
+                     "Thinning TEXT,",
+                     "Special TEXT,",
+                     "SeedSurv TEXT,",
+                     "OverlapMatrix TEXT )"))
     
     # Create the species table that lists species IDs and names
     dbGetQuery(con,
@@ -438,6 +390,8 @@ tm.site.sqlite <- function (SpeciesParams,
                  " AND Rain = ", WrapText(ARG.INFO["rain", "obj.name"]),
                  " AND Fire = ", WrapText(ARG.INFO["fire", "obj.name"]),
                  " AND FireFunc = ", WrapText(ARG.INFO["fireFunc", "obj.name"]),
+                 " AND FireCanopyFunc = ", WrapText(ARG.INFO["fireCanopyFunc", "obj.name"]),
+                 " AND FireEarlyProb = ", WrapText(ARG.INFO["fireEarlyProb", "obj.name"]),
                  " AND Thinning = ", WrapText(ARG.INFO["thinning", "obj.name"]),
                  " AND Special = ", WrapText(ARG.INFO["special", "obj.name"]),
                  " AND SeedSurv = ", WrapText(ARG.INFO["seedSurv", "obj.name"]), 
@@ -458,9 +412,9 @@ tm.site.sqlite <- function (SpeciesParams,
       # arg object names in separate columns)
       dbGetPreparedQuery(DBCON, 
                          paste("INSERT INTO paramsets",
-                               "(ID, SpeciesSetID, InitialCohorts, Rain, Fire, FireFunc,",
+                               "(ID, SpeciesSetID, InitialCohorts, Rain, Fire, FireFunc, FireCanopyFunc, FireEarlyProb,",
                                "Thinning, Special, SeedSurv, OverlapMatrix)",
-                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
                          data.frame(paramSetID, spSetID, as.list(ARG.INFO$obj.name)))
       
       StoreParamSnapshot(paramSetID)
@@ -499,7 +453,7 @@ tm.site.sqlite <- function (SpeciesParams,
   #  paramobjects database table
   # ====================================================================================
   StoreParamSnapshot <- function(paramSetID) {
-    params <- list(SpeciesParams=SpeciesParams, initial.cohorts=initial.cohorts, rain=rain, fire=scheduled.fires, 
+    params <- list(SpeciesParams=Spp, initial.cohorts=initial.cohorts, rain=rain, fire=scheduled.fires, 
                    fire.func=fire.func, thinning=thinning, special=special, seedling.survival=seedling.survival, 
                    overlap.matrix=overlap.matrix, ov.gen=ov.gen, recruitment=recruitment) 
     
@@ -539,24 +493,24 @@ tm.site.sqlite <- function (SpeciesParams,
     # resource use surrogate (e.g. canopy surface area)
     #
     spID <- cohort.data[ colSpID ]
-    tree.desc <- SpeciesParams[[spID]]$tree.desc
+    desc <- Spp[[spID]]@tree_desc
     
     # Match the cohort height to a row in the descriptors table
     # using the heights col (1)
     # (note: we are implicitly rounding up here)
     # If no matching row is found (tree too tall) use the last one
     #
-    i <- match( TRUE, tree.desc[,1] >= cohort.data[ colHeight ], nrow(tree.desc) )
+    i <- match( TRUE, desc[,1] >= cohort.data[ colHeight ], nrow(desc) )
     
-    canopy.radius <- tree.desc[i,2] 
-    resource.use <- tree.desc[i,3] * cohort.data[colN]
+    canopy.radius <- desc[i,2] 
+    resource.use <- desc[i,3] * cohort.data[colN]
     
     # calculate dbh (cm) and basal.area (sq m) if the parameters were provided
     #
     dbh <- 0
     basal.area <- 0
     if (HAS.HT.DBH.PARS[spID]) {
-      pars <- SpeciesParams[[spID]]$ht.dbh.pars
+      pars <- Spp[[spID]]@ht_dbh_pars
       dbh <- exp(pars[1] + pars[2] / {pars[3] + cohort.data[ colHeight ]})
       basal.area <- pi * (dbh/200)^2 * cohort.data[ colN ]
     }
@@ -570,32 +524,20 @@ tm.site.sqlite <- function (SpeciesParams,
   # ====================================================================================
   AddCohort <- function( spID, N )
   {
-    pars <- SpeciesParams[[spID]]
+    pars <- Spp[[spID]]
     ID <- NextCohortID
     NextCohortID <<- NextCohortID + 1
     
     # cols: ID, spID, age, height, N, Protect, CoppiceStage, FormerHt, CoppiceOn, ResourceUse, 
     # CanopyRadius
     new.cohort.data <- numeric(NUM.COHORTS.COLS)
-    new.cohort.data[c(colID, colSpID, colHeight, colN, colFormerHt)] <- c( ID, spID, pars$height.yr1, N, -1 )
+    new.cohort.data[c(colID, colSpID, colHeight, colN, colFormerHt)] <- c( ID, spID, pars@height_yr1, N, -1 )
     Cohorts <<- rbind(Cohorts, new.cohort.data)
     
-    # For the moment we are not setting the tree descriptors for a new cohort so that
-    # this version of the model produces the same data as the older versions.
-    #
-    # treeDesc <- GetTreeDescriptors( ID )
-    # Cohorts[ nrow(Cohorts), c(colCanopyRadius, colResourceUse, colDBH, colBasalArea) ] <<-
-    #     c(treeDesc$radius, treeDesc$resource.use, treeDesc$dbh, treeDesc$basal.area)
-    #
-    # new.cohort.core.area <- numeric(NUM.SPP + 1)
-    # for (sp in 1:NUM.SPP ) {
-    #  overlap.value <- overlap.matrix[ sp, spID ]
-    #  new.cohort.core.area[sp] <- N * pi * (overlap.value * treeDesc$radius)^2
-    # }
-    # new.cohort.core.area[NUM.SPP+ 1] <- N * pi * (ov.gen * treeDesc$radius)^2
-    # Cohorts[ nrow(Cohorts), colFirstCoreArea:colGeneralCoreArea ] <<- new.cohort.core.area
+    NewCohortSummaryRecord( ID, spID, YEAR, 0, N, pars@height_yr1, 0, 0, 0 )
     
-    NewCohortSummaryRecord( ID, spID, YEAR, 0, N, pars$height.yr1, 0, 0, 0 )
+    # return the new cohort's ID
+    ID
   }
   
   
@@ -633,6 +575,7 @@ tm.site.sqlite <- function (SpeciesParams,
                                                          colCoppiceStage, colFormerHt, colCoppiceOn, colGrowthRate, colSurvP, colGeneralCoreArea), drop=FALSE ]))) 
     dbCommit( DBCON )
     
+    
     irows <- match(Cohorts[ , colID], CohortSummary[1:TOTAL.COHORTS, cscolID])
     if (any(is.na(irows))) {
       stop("Cohorts recs found without matching CohortSummary recs")
@@ -654,7 +597,8 @@ tm.site.sqlite <- function (SpeciesParams,
   WriteSummaryData <- function() {
     common.data <- cbind(RUNID, 1:YEAR, 
                          common.resource.use[1:YEAR], 
-                         common.core.area[1:YEAR, , drop=TRUE], 
+                         common.core.area[1:YEAR], 
+                         common.merged.area[1:YEAR],
                          rain[1:YEAR], 
                          scheduled.fires[1:YEAR], 
                          realised.fires[1:YEAR], 
@@ -725,7 +669,7 @@ tm.site.sqlite <- function (SpeciesParams,
     
   } else {
     # Ensure that the values in the overlap matrix are in the same order as species
-    # in the SpeciesParams list. If the species names do not occur in the row and column
+    # in the Spp list. If the species names do not occur in the row and column
     # names, complain.
     m <- matrix(0, nrow=nrow(overlap.matrix), ncol=ncol(overlap.matrix))
     for (i in 1:NUM.SPP) {
@@ -757,13 +701,12 @@ tm.site.sqlite <- function (SpeciesParams,
   initial.cohorts.cols <- 1:4
   if ( ncol(initial.cohorts) == 5 ) {
     initial.cohorts.cols <- 2:5
-    print( "Initial cohorts matrix has 5 cols - assuming it is an old version" )
-    flush.console()
+    cat( "Initial cohorts matrix has 5 cols - assuming it is an old version \n" )
   }
   
   num.initial.cohorts <- nrow(initial.cohorts) 
   
-  print( paste(num.initial.cohorts, "initial cohorts") );  flush.console()
+  cat( num.initial.cohorts, "initial cohorts \n" )
   
   max.num.cohorts <- num.initial.cohorts + length(rain)*NUM.SPP
   
@@ -782,15 +725,15 @@ tm.site.sqlite <- function (SpeciesParams,
   # for simulation output.
   #==============================================================
   common.resource.use <- numeric( length(rain) )
+  common.core.area <- numeric( length(rain) )  # just stores CoreAreaGeneral values
+  common.merged.area <- numeric( length(rain) )
+  
+  total.core.area <- numeric( NUM.SPP + 1 )
+  names.combined <- paste("CombCoreArea", SP.NAMES, sep="")
+  names(total.core.area) <- c( names.combined, "CombCoreAreaGeneral")
+  
   realised.fires <- numeric( length(rain) )
   flammable.proportions <- numeric( length(rain) )
-  
-  combined.core.area <- numeric( NUM.SPP + 1 )
-  names.combined <- paste("CombCoreArea", SP.NAMES, sep="")
-  names(combined.core.area) <- c( names.combined, "CombCoreAreaGeneral")
-  
-  common.core.area <-  matrix( NA, length(rain), NUM.SPP + 1 )
-  colnames(common.core.area) <- names(combined.core.area)
   
   # Connect to the output database. This will be either a user-supplied database or a 
   # newly created one.
@@ -812,7 +755,7 @@ tm.site.sqlite <- function (SpeciesParams,
   if ( is.null( scheduled.fires ) ) 
   {
     scheduled.fires <- numeric( length(rain) )
-    print ( paste ( "a schedule of fires was not provided, so assuming no fires during simulation" ) );  flush.console()
+    cat ( "No fires in this simulation \n" )
   }
   else
   {
@@ -972,7 +915,7 @@ tm.site.sqlite <- function (SpeciesParams,
   for ( YEAR in 1:length( rain ) )
   {
     if ( YEAR %% session.settings$display.time.interval == 0 | YEAR == length(rain) ) {
-      cat( paste("Year", YEAR, "\n") )
+      cat( "Year ", YEAR, "\n" )
       flush.console()
     }
     
@@ -996,8 +939,8 @@ tm.site.sqlite <- function (SpeciesParams,
           else if ( i.action == special.action.cut )
           {
             cut.h <- min( Cohorts[irow, colHeight], special[i, specialColValue] )
-            pars <- SpeciesParams[[ Cohorts[irow, colSpID] ]]
-            if ( is.euc[Cohorts[irow, colSpID]] & cut.h <= pars$height.yr1 )
+            pars <- Spp[[ Cohorts[irow, colSpID] ]]
+            if ( is.euc[Cohorts[irow, colSpID]] & cut.h <= pars@height_yr1 )
             {
               Cohorts[irow, colCoppiceStage] <- Cohorts[irow, colCoppiceStage] + 1
               Cohorts[irow, colCoppiceOn] <- 1
@@ -1082,18 +1025,22 @@ tm.site.sqlite <- function (SpeciesParams,
       }
     }
     
-    combined.resource.use <- sum( Cohorts[ , colResourceUse ] )
+    total.resource.use <- sum( Cohorts[ , colResourceUse ] )
     
     for ( k in 1:(NUM.SPP+1) ) {
-      combined.core.area[k] <- sum( Cohorts[ , colFirstCoreArea + k - 1] )
+      total.core.area[k] <- sum( Cohorts[ , colFirstCoreArea + k - 1] )
     }
     
+    # An estimate of the merged canopy area of the stand is made using
+    # the fire canopy function and the unscaled total core area
+    #
+    total.merged.area <- fire.canopy.func( total.core.area[NUM.SPP + 1] )
     
     for ( i in SafeIndex(to=nrow(Cohorts)) )
     {
       if ( Cohorts[i, colN] <= 0 ) next
       
-      pars <- SpeciesParams[[ Cohorts[i, colSpID] ]]
+      pars <- Spp[[ Cohorts[i, colSpID] ]]
       
       #==============================================================
       # Growth
@@ -1104,7 +1051,7 @@ tm.site.sqlite <- function (SpeciesParams,
       g.rain.adj <- 1 / {1 + exp( -{ adj.pars[1] + adj.pars[2] * rain[YEAR] * h^adj.pars[3] } ) }
       
       adj.pars <- pars$growth.crowding.pars
-      g.crowd.adj <- 1 / {1 + exp( -{adj.pars[1] + adj.pars[2] * combined.resource.use * h^adj.pars[3]} ) }
+      g.crowd.adj <- 1 / {1 + exp( -{adj.pars[1] + adj.pars[2] * total.resource.use * h^adj.pars[3]} ) }
       
       # Now, if you are a euc with coppicing turned on and you're still <70% of former(max) ht, your growth rate is 
       # boosted, whereas if you have reached or exceeded 70% of former height your growth rate is normal and
@@ -1117,20 +1064,20 @@ tm.site.sqlite <- function (SpeciesParams,
           # to introduce a slackening off of the boosting effect due to root area equilibrating with shoot area 
           #which we estimated might happen at 70% of former ht (see coppice spreadsheet)
         { 
-          boost.pars <- pars$coppice.boost.pars
-          adjusted.boosted.gr <- max( pars$growth.rate, boost.pars[1]/{1 + boost.pars[2] * exp(-boost.pars[3] * former.h)} )
+          boost.pars <- pars@coppice_boost_pars
+          adjusted.boosted.gr <- max( pars@growth_rate, boost.pars[1]/{1 + boost.pars[2] * exp(-boost.pars[3] * former.h)} )
           # this equation and the coefficients fitted to it (in coppice.boost.pars) were from a regression of
           # coppice growth data from Mt Pilot, and directly relate a boosted growth rate to a tree's former height.
           Cohorts[i, colGrowthRate] <- adjusted.boosted.gr * g.rain.adj * g.crowd.adj
         } else if ( h >= 0.7 * former.h ) {
-          Cohorts[i, colGrowthRate] <- pars$growth.rate * g.rain.adj * g.crowd.adj
+          Cohorts[i, colGrowthRate] <- pars@growth_rate * g.rain.adj * g.crowd.adj
           Cohorts[i, colCoppiceOn] <- 0
         }
       } else {
-        Cohorts[i, colGrowthRate] <- pars$growth.rate * g.rain.adj * g.crowd.adj
+        Cohorts[i, colGrowthRate] <- pars@growth_rate * g.rain.adj * g.crowd.adj
       }
       # original 'bodge' curve for height increment vs height
-      #h.incr <- max(0, (h * growth.rate * (pars$max.height - h) / pars$max.height) )
+      #h.incr <- max(0, (h * growth.rate * (pars@max_height - h) / pars@max_height) )
       
       # current curve based on two parameter exponential heights vs age formula
       # for ideal conditions...
@@ -1138,7 +1085,7 @@ tm.site.sqlite <- function (SpeciesParams,
       # which gives height increment vs height formula
       #    delta.h = c(a - h)
       #
-      h.incr <- Cohorts[i, colGrowthRate] * (pars$max.height - h)
+      h.incr <- Cohorts[i, colGrowthRate] * (pars@max_height - h)
       
       Cohorts[i, colHeight] <- h + h.incr
       
@@ -1147,7 +1094,7 @@ tm.site.sqlite <- function (SpeciesParams,
       # Survival
       #==============================================================
       #print( "Survival" );  flush.console()
-      p.base <- pars$survival.prob[ min(length( pars$survival.prob ), Cohorts[i, colAge]) ]
+      p.base <- pars@survival_prob[ min(length( pars@survival_prob ), Cohorts[i, colAge]) ]
       
       if ( is.euc[Cohorts[i, colSpID]] & Cohorts[i, colCoppiceOn] == 1  &  h < 0.7 * former.h )  
         # this is safe as long as former.h is never NA when colCoppiceOn = 1, which should always be true???
@@ -1161,7 +1108,7 @@ tm.site.sqlite <- function (SpeciesParams,
       s.rain.adj <- 1 / {1 + exp( -{ adj.pars[1] + adj.pars[2] * rain[YEAR] * h^adj.pars[3] } ) }
       
       adj.pars <- pars$survival.crowding.pars
-      s.crowd.adj <- 1 / {1 + exp( -{adj.pars[1] + adj.pars[2] * combined.resource.use * h^adj.pars[3]} ) }
+      s.crowd.adj <- 1 / {1 + exp( -{adj.pars[1] + adj.pars[2] * total.resource.use * h^adj.pars[3]} ) }
       
       Cohorts[i, colSurvP] <- p.base * s.rain.adj * s.crowd.adj
       
@@ -1175,6 +1122,11 @@ tm.site.sqlite <- function (SpeciesParams,
     # Recruitment
     #==============================================================
     
+    # We always want this vector to be initialized, even for years where there is no recruitment
+    # because it is used in the fire sub-model below.
+    #
+    new.cohort.ids <- integer(NUM.SPP)
+    
     if ( recruitment[YEAR] )
     {
       #print( "Recruitment" );  flush.console()
@@ -1183,7 +1135,7 @@ tm.site.sqlite <- function (SpeciesParams,
       
       for ( spID in 1:NUM.SPP )
       {
-        pars <- SpeciesParams[[spID]]
+        pars <- Spp[[spID]]
         
         seed <- 0
         # Seed production of in-situ trees
@@ -1194,7 +1146,7 @@ tm.site.sqlite <- function (SpeciesParams,
           {
             h <- round( Cohorts[i, colHeight] )
             if ( h >= 1 )
-              seed <- seed + Cohorts[i, colN] * pars$seed.output[h, 2] * pars$seed.output[h, 3]
+              seed <- seed + Cohorts[i, colN] * pars@seed_output[h, 2] * pars@seed_output[h, 3]
           }
         }
         
@@ -1204,33 +1156,35 @@ tm.site.sqlite <- function (SpeciesParams,
         }
         
         # rainfall effect
-        adj <- 1 / {1 + exp( -sum( pars$seed.rainfall.pars * c(1, rain[YEAR]) ) )}
+        srp <- pars@seed_rainfall_pars
+        adj <- 1 / (1 + exp( -( srp[1] + srp[2] * rain[YEAR] ) ) )
         seed <- seed * adj
         
         # balls in bins model
         #
-        # we don't want endless seedlings cramming in over the max.sprogs limit
+        # we don't want endless seedlings cramming in over the max_sprogs limit
         # which will happen if we just consider cover of existing residents, so
         # we adjust the number of bins by the number of existing trees
         #
-        free.bins <- pars$max.sprogs - num.stems
+        free.bins <- pars@max_sprogs - num.stems
         if ( free.bins <= 0 ) next
         
-        num.sprogs <- rbinom( 1, pars$max.sprogs, 1 - exp(-seed / pars$max.sprogs) )
+        num.sprogs <- rbinom( 1, pars@max_sprogs, 1 - exp(-seed / pars@max_sprogs) )
         if ( num.sprogs == 0 ) next
         
-        num.sprogs <- rbinom( 1, num.sprogs, free.bins / pars$max.sprogs )
+        num.sprogs <- rbinom( 1, num.sprogs, free.bins / pars@max_sprogs )
         if ( num.sprogs == 0 ) next
         
-        # reduction in available space (resources) perceived by the new recruits,
-        # (using the column of combined.core.area specific to that seedling sp:
+        # Reduction in available space (resources) perceived by the new recruits.
+        # For this we take the summed scaled canopy area (as seen by the recruiting
+        # species) and apply a merging function to calculate total obscuring cover.
         #
-        # consider porosity here ?
-        gap <- cell.area - combined.core.area[spID]
+        canopy.area <- RECRUIT.CANOPY.FUNC[[spID]]( total.core.area[spID] )
+        gap <- CELL.AREA - canopy.area
         
         if ( gap > 0 ) 
         {
-          num.sprogs <- rbinom( 1, num.sprogs, gap / cell.area )
+          num.sprogs <- rbinom( 1, num.sprogs, gap / CELL.AREA )
           
           # finally we imagine that the value for this year for
           # seedling.survival is something like bunnies grazing on 
@@ -1238,7 +1192,9 @@ tm.site.sqlite <- function (SpeciesParams,
           #
           num.sprogs <- rbinom( 1, num.sprogs, seedling.survival[YEAR] )
           
-          if ( num.sprogs > 0 ) AddCohort( spID, num.sprogs )
+          if ( num.sprogs > 0 ) { 
+            new.cohort.ids[spID] <- AddCohort( spID, num.sprogs )
+          }
         }
       }
     }
@@ -1263,7 +1219,7 @@ tm.site.sqlite <- function (SpeciesParams,
       # of actual data (Janet Cohn's data for incoming and outgoing intensity (represented by eucalypt char heights) and 
       # Basal Areas, and my calculations of flammable proportions in her quadrats), and on a combination of models fitted 
       # to this data. This calculation of flammable prop was done in the same way as the model calculates it (ie. takes 
-      # account of when the combined.core.area exceeds the cell area).
+      # account of when the total.core.area exceeds the cell area).
       #
       # if ( scheduled.fire.intensity > Threshold ) 
       #  { return( scheduled.fire.intensity  ) } # realised.fire.int above threshold is same as scheduled
@@ -1272,56 +1228,56 @@ tm.site.sqlite <- function (SpeciesParams,
       # }
       # and we are using Threshols = 4.5 and b1 = -1.4 
       
-      flammable.area <- cell.area
-      
-      combined.core.area.post.growth <- 0
-      for ( i  in SafeIndex(to=nrow(Cohorts)) )
-      {
-        combined.core.area.post.growth <- combined.core.area.post.growth + ( Cohorts[i, colN] * pi * (ov.gen * Cohorts[i, colCanopyRadius])^2 )
-      }
-      
-      for ( spID in 1:NUM.SPP )
-      {
-        non.flammability <- SpeciesParams[[spID]]$non.flammability
+      flammable.area <- CELL.AREA
+      if (nrow(Cohorts) > 0) {
+        total.core.area.post.growth <-
+          tapply( apply(Cohorts, 1, function(co) co[colN] * co[colCanopyRadius] * co[colCanopyRadius] * pi ), Cohorts[ , colSpID], sum )
         
-        for ( i in which( Cohorts[,colSpID] == spID ) )
-        { 
-          if ( combined.core.area.post.growth <= cell.area ) {
-            flammable.area <- flammable.area - Cohorts[i, colN] * pi * (ov.gen * Cohorts[i, colCanopyRadius])^2 * non.flammability
-          } else if ( combined.core.area.post.growth > cell.area ) {
-            flammable.area <- flammable.area - ( cell.area * ( Cohorts[i, colN] * pi * (ov.gen * Cohorts[i, colCanopyRadius])^2 * non.flammability ) / 
-                                                   combined.core.area.post.growth )
-          }
-        }
+        # From this point it gets fudgy...
+        # We apply the canopy merging function to get total merged canopy area.
+        # We then estimate a non-flammable merged area based on the proportion of the non-merged area
+        # occupied by each species and their respective non-flammabilities
+        
+        merged.area <- fire.canopy.func( sum(total.core.area.post.growth) )
+        
+        non.flammable.area <- sum( merged.area * total.core.area.post.growth / sum(total.core.area.post.growth) * NON.FLAMMABILITY )
+        flammable.area <- max(0, CELL.AREA - non.flammable.area)
       }
       
-      # K.R. Feb 2009: I have turned off two steps previously in the model for fire: 
-      # (1) The test of: if (flammable.area > 0), then continue with the fire part of the model 
-      # because this was an unnecessary extra step (the influence of zero flammable area is now 
-      # dealt with in the fire.function); 
-      # (2) I have also turned off the step that tests fire.prob against a runif(1) because the 
-      # fire.func no longer generates a probability, but a realised fire intensity instead (and 
-      # this fire in the site model is a flaming front that has already arrived at the stand 
-      # boundary; it is not a new ignition or spotting ahead of the fire. When we have a 
-      # landscape model, it will be appropriate to bring back this test of fire.prob against 
-      # runif(1) to determine whether an ignition actually takes off into a fire.
       
-      flammable.prop <- flammable.area / cell.area
+      # K.R. Feb 2009: I have turned off two steps previously in the model for fire: (1) The test of: if ( 
+      # flammable.area > 0), then continue with the fire part of the model ? because this was an unnecessary extra 
+      # step (the influence of zero flammable area is now dealt with in the fire.function); (2) I have also turned off 
+      # the step that tests fire.prob against a runif(1) because the fire.func no longer generates a probability, but
+      # a realised fire intensity instead (and this fire in the site model is a flaming front that has already 
+      # arrived at the stand boundary; it is not a new ignition or spotting ahead of the fire. When we have a 
+      # landscape model, it will be appropriate to bring back this test of fire.prob against runif(1) to 
+      # determine whether an ignition actually takes off into a fire.
+      
+      flammable.prop <- flammable.area / CELL.AREA
       realised.fire.intensity <- fire.func( flammable.prop, scheduled.fires[YEAR] )
       realised.fires[YEAR] <- realised.fire.intensity
       flammable.proportions[YEAR] <- flammable.prop
       
       if (session.settings$display.fire.data) {
-        print( paste( "combined.core.area.post.growth: ",combined.core.area.post.growth ) ); flush.console()
-        print( paste( "flammable.area: ",flammable.area ) ); flush.console()    
-        print( paste("flam prop:", flammable.prop ) ); flush.console()
-        print( paste("realised.fire.intensity of: ",realised.fires[YEAR], " in year ",YEAR ) ); flush.console()
+        print( paste( "total.core.area.post.growth: ", total.core.area.post.growth ) ) 
+        print( paste( "flammable.area: ",flammable.area ) )
+        print( paste("flam prop:", flammable.prop ) )
+        print( paste("realised.fire.intensity of: ",realised.fires[YEAR], " in year ",YEAR ) )
+        flush.console()
       }
+      
+      # Test if we are modelling this as an early fire (pre-recruitment) or a late fire (post-recruitment)
+      is.early.fire <- runif(1) < fire.early.prob
       
       for ( i in SafeIndex(to=nrow(Cohorts)) ) {
         if ( Cohorts[i, colN] <= 0 ) next
         
-        pars <- SpeciesParams[[ Cohorts[i, colSpID] ]]
+        # if this is a new cohort and the fire is 'early' then we skip to
+        # simulate the cohort having arisen after the fire
+        if (is.early.fire && Cohorts[i, colID] %in% new.cohort.ids) next
+        
+        pars <- Spp[[ Cohorts[i, colSpID] ]]
         h <- Cohorts[i, colHeight]
         former.h <- Cohorts[i, colFormerHt]
         
@@ -1353,8 +1309,8 @@ tm.site.sqlite <- function (SpeciesParams,
         Cohorts[i, colSurvP] <- Cohorts[i, colSurvP] * fire.surv  # NB this won't be exactly the same as the rbinom result above.
         
         if ( Cohorts[i, colN] > 0 ) {
-          # height adjustment for survivors; although this is not specific to eucs, at present callitris height.fire.pars are null (Inf, 0, 0, 0)
-          adj.pars <- pars$height.fire.pars
+          # height adjustment for survivors; although this is not specific to eucs, at present callitris height_fire_pars are null (Inf, 0, 0, 0)
+          adj.pars <- pars@height_fire_pars
           h <- Cohorts[i, colHeight]
           # fire.height.adj <- 1 / (1 + exp( -( adj.pars[1] + adj.pars[2] * realised.fire.intensity  * h^adj.pars[3] ) ) )
           # THIS IS THE FINAL GENERALIZED LOGISTIC FUNCTION MICHAEL FITTED IN JULY 2010:
@@ -1362,7 +1318,7 @@ tm.site.sqlite <- function (SpeciesParams,
           
           #print( paste(pars$name, "fire height adj", fire.height.adj) ); flush.console()
           
-          new.h <- max( (h * fire.height.adj), pars$height.yr1 )
+          new.h <- max( (h * fire.height.adj), pars@height_yr1 )
           # We need to bring all initial coppice heights up to at least height.yr1 because otherwise the current 
           # resprout.propn pars give really tiny new.hts which do not grow! (like 1x10^-92)!!!
           # (note: this height change can affect protected cohorts)
@@ -1410,17 +1366,14 @@ tm.site.sqlite <- function (SpeciesParams,
     # Report and increment cohort ages
     #==============================================================
     
-    # Note: at the moment we skip writing output for years with
-    # no cohorts (shouldn't happen if external.seed is TRUE but
-    # might be an issue later if that arg is converted to a probability
-    # or vector)
     if (nrow(Cohorts) > 0) {
       WriteCohortData()
       Cohorts[, colAge] <- Cohorts[, colAge] + 1
     }
     
-    common.resource.use[YEAR] <- combined.resource.use
-    common.core.area[YEAR, ] <- combined.core.area
+    common.resource.use[YEAR] <- total.resource.use
+    common.core.area[YEAR] <- total.core.area[NUM.SPP+1]  # CoreAreaGeneral
+    common.merged.area[YEAR] <- total.merged.area
     
     # Check for loss of all cohorts and break out early if we are not using
     # external seed input

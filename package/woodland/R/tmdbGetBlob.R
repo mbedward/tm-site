@@ -1,3 +1,11 @@
+#' TODO - remember what this one does !
+#' 
+#' @param tmdb an open database connection
+#' @param paramSetID identifier of the parameter set to retrieve, 
+#'   or NULL (default) to be prompted
+#' 
+#' @export
+#' 
 tmdbGetBlob <- function(tmdb, paramSetID=NULL) {
   ids <- dbGetQuery(con, "SELECT ID FROM paramobjects")[,1]
   if (is.null(paramSetID)) {
