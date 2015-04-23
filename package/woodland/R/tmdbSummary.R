@@ -1,4 +1,4 @@
-#' Generate a summary of the contents of a tm.site output database.
+#' Generate a summary of the contents of a \link{\code{tmRun}} output database.
 #' 
 #' @param tmdb an open database connection
 #' 

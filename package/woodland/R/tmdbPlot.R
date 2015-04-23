@@ -4,7 +4,7 @@ tmdbPlot <- function( tmdb, val=c("mergedarea", "basalarea", "corearea", "resour
 
 # Plots yearly summed value (across cohorts by species) for a chosen variable.
 #
-# tmdb - an open connection to a tm.site database
+# tmdb - an open connection to a \link{\code{tmRun}} output database
 #
 # val - name (as character) of the variable to plot. The values plotted
 #       will be the sum of individual cohort values for each year.

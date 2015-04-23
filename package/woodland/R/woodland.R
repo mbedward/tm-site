@@ -4,7 +4,7 @@
 #' 
 #' @section Simulation function:
 #' 
-#' Some words about running tm.site
+#' Some words about running a simulation with \link{\code{tmRun}}...
 #' 
 #' @section Utility functions:
 #' 

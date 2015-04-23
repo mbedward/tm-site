@@ -16,7 +16,7 @@ TRUE if the database was open and contained the required tables;
   FALSE otherwise
 }
 \description{
-Checks that a database contains the expected tables for tm.site simulation
+Checks that a database contains the expected tables for \link{\code{tmRun}}
 output and, optionally, prints a summary of the database contents.
 }
 \seealso{

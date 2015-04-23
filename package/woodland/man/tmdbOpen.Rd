@@ -2,7 +2,7 @@
 % Please edit documentation in R/tmdb_utility_functions.R
 \name{tmdbOpen}
 \alias{tmdbOpen}
-\title{Open an output database from the tm.site model.}
+\title{Open an output database from the \link{\code{tmRun}} function.}
 \usage{
 tmdbOpen(path = NULL, driver = NULL)
 }
@@ -31,6 +31,6 @@ tmdbClose(con)
 }
 }
 \seealso{
-\code{\link{tmdbOpen}}, \code{\link{tmdbValidate}}
+\link{\code{tmdbOpen}}, \link{\code{tmdbValidate}}
 }
 

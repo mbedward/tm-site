@@ -1,6 +1,6 @@
 #' Simulates dynamics of a woodland stand.
 #' 
-#' \code{tm.site} simulates the dynamics of cohorts of one or more tree species
+#' \code{tmRun} simulates the dynamics of cohorts of one or more tree species
 #' in a woodland stand. For each cohort the simulation tracks annual values of
 #' age, number of trees, height, plus a set of morphometrics derived from height
 #' such as DBH and canopy radius. The location of individual trees is not
@@ -24,21 +24,21 @@
 #' 
 #' @export
 #' 
-tm.site <- function (Spp, 
-                     initial.cohorts, 
-                     rain, 
-                     scheduled.fires=NULL, 
-                     fire.func=NULL, 
-                     fire.canopy.func=NULL, 
-                     fire.early.prob=0,
-                     overlap.matrix=0, 
-                     ov.gen=0, 
-                     recruitment=TRUE, 
-                     thinning=NULL, 
-                     special=NULL, 
-                     seedling.survival=NULL, 
-                     session.settings=NULL, 
-                     database=NULL )
+tmRun <- function (Spp, 
+                   initial.cohorts, 
+                   rain, 
+                   scheduled.fires=NULL, 
+                   fire.func=NULL, 
+                   fire.canopy.func=NULL, 
+                   fire.early.prob=0,
+                   overlap.matrix=0, 
+                   ov.gen=0, 
+                   recruitment=TRUE, 
+                   thinning=NULL, 
+                   special=NULL, 
+                   seedling.survival=NULL, 
+                   session.settings=NULL, 
+                   database=NULL )
 {
 
   # Programming notes
@@ -147,7 +147,7 @@ tm.site <- function (Spp,
   }
   
   NON.FLAMMABILITY <- numeric(NUM.SPP)
-  for ( spID in 1:NUM.SPP ) NON.FLAMMABILITY[ spID ] <- Spp[[spID]]$non.flammability
+  for ( spID in 1:NUM.SPP ) NON.FLAMMABILITY[ spID ] <- Spp[[spID]]@non_flammability
   
   if (is.null(fire.func)) {
     fire.func <- function(flam.prop, intensity) { intensity }
@@ -1104,10 +1104,10 @@ tm.site <- function (Spp,
       
       # inverse logit expression to calculate probability adjustment
       #
-      adj.pars <- pars$survival.rainfall.pars
+      adj.pars <- pars@survival_rainfall_pars
       s.rain.adj <- 1 / {1 + exp( -{ adj.pars[1] + adj.pars[2] * rain[YEAR] * h^adj.pars[3] } ) }
       
-      adj.pars <- pars$survival.crowding.pars
+      adj.pars <- pars@survival_crowding_pars
       s.crowd.adj <- 1 / {1 + exp( -{adj.pars[1] + adj.pars[2] * total.resource.use * h^adj.pars[3]} ) }
       
       Cohorts[i, colSurvP] <- p.base * s.rain.adj * s.crowd.adj
@@ -1291,7 +1291,7 @@ tm.site <- function (Spp,
         }
         
         # inverse logit expression to calculate probability of survival in fire
-        adj.pars <- pars$survival.fire.pars
+        adj.pars <- pars@survival_fire_pars
         # NB currently we're using different forms for Euc and Callitris...this might change when we reassess Euc fire survival:
         if (is.euc[Cohorts[i, colSpID]]) {
           fire.surv <- 1 / (1 + exp( -( adj.pars[1] + adj.pars[2] * realised.fire.intensity * h^adj.pars[3] ) ) ) 
@@ -1325,7 +1325,7 @@ tm.site <- function (Spp,
           
           if (is.euc[Cohorts[i, colSpID]]) {
             # We boost all surviving Eucs which are <70% of their former (max) ht, not just truly
-            # coppiced ones: so throughout tm.site, colCoppiceOn and colCoppiceStage now actually
+            # coppiced ones: so throughout tmRun, colCoppiceOn and colCoppiceStage now actually
             # mean any eucs with fire height reductions.  
             # ???I SHOULD DO THE SAME FOR CUT-'N-COPPICED TREES - THINK ABOUT AND DO THIS LATER WHEN HAVE TIME??
             Cohorts[i, colCoppiceStage] <- Cohorts[i, colCoppiceStage] + 1  # this will tell us how many fires a cohort has survived through its 'lifetime'.

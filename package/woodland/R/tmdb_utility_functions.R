@@ -1,4 +1,4 @@
-#' Open an output database from the tm.site model.
+#' Open an output database from the \link{\code{tmRun}} function.
 #' 
 #' Attempts to open a connection to the given database and, if
 #' successful, checks that the database contains the expected tables
@@ -12,7 +12,7 @@
 #'   
 #' @return the database connection
 #' 
-#' @seealso \code{\link{tmdbOpen}}, \code{\link{tmdbValidate}}
+#' @seealso \link{\code{tmdbOpen}}, \link{\code{tmdbValidate}}
 #' 
 #' @examples
 #' \dontrun{
@@ -44,7 +44,7 @@ tmdbOpen <- function (path=NULL, driver=NULL)
   con <- RSQLite::dbConnect(driver, path)
   if (!tmdbValidate(con, show=FALSE)) {
     RSQLite::dbDisconnect(con)
-  	stop(path, " is not a valid tm.site database")
+  	stop(path, " is not a valid tmRun output database")
   }
   
   # Return the connection to the database
@@ -123,7 +123,7 @@ tmdbSave <- function (tmdb, dest, reconnect=FALSE)
 
 #' Check that a database of simulation outputs is valid.
 #' 
-#' Checks that a database contains the expected tables for tm.site simulation
+#' Checks that a database contains the expected tables for \link{\code{tmRun}}
 #' output and, optionally, prints a summary of the database contents. 
 #' 
 #' @param tmdb an open database connection

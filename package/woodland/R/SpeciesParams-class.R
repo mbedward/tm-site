@@ -1,17 +1,19 @@
 #' Class to hold species parameters used in simulation.
 #' 
 #' \code{SpeciesParams} is an S4 class which defines the species parameters used
-#' by the \code{tm.site} simulation. This replaces the previous use of a named list
-#' for the same purpose and provides some type and validity checking of arguments.
-#' Note that at the moment there are no associated methods to get and set elements
-#' (as is usually the case for S4 classes), instead you deal with the slots directly.
-#' Given that this is just a data class that shouldn't be too painful.
+#' by the \link{code{tmRun}} simulation function. This replaces the previous use of a
+#' named list for the same purpose and provides some type and validity checking
+#' of arguments. Note that at the moment there are no associated methods to get
+#' and set elements (as is usually the case for S4 classes), instead you deal
+#' with the slots directly. Given that this is just a data class that shouldn't
+#' be too painful.
 #' 
 #' @section Tree growth:
-#' Changes in tree dimensions are modelled in a very basic fashion. change in tree height 
-#' is modelled as a function of existing height, moisture (rainfall), and stand resource 
-#' use. All other dimensions such as trunk diameter, canopy radius and canopy surface area,
-#' are derived deterministically from tree height.
+#' Changes in tree dimensions are modelled in a very basic fashion. change in
+#' tree height is modelled as a function of existing height, moisture
+#' (rainfall), and stand resource use. All other dimensions such as trunk
+#' diameter, canopy radius and canopy surface area, are derived
+#' deterministically from tree height.
 #' 
 #' Annual growth in tree height is described by:
 #' \preformatted{dh = (hmax - height) * g.adj}
@@ -41,6 +43,15 @@
 #' @section Seed:
 #' Seed production of trees is modelled as a function of height, based on a lookup
 #' matrix with columns: tree height, seed production, proportion retained.
+#' 
+#' 
+#' @section Survival:
+#' 
+#' The probability of fire survival is modelled as a function of tree height and
+#' fire intensity using a generalized logistic form:
+#' \preformatted{psurv = ( 1 / (1 + exp(-( b1 + b2 * intensity + b3 * height^b4 )))^b5 )} 
+#' where
+#' \code{intensity} is the realized intensity of the fire in the stand
 #' 
 #' 
 #' @slot name Species name (single element character vector)
@@ -95,6 +106,23 @@
 #' @slot external_seed_fn an optional function to return the number of seeds
 #'   of this species entering the stand from external sources in a given year.
 #'   The function should take no arguments and return a single numeric value.
+#'   
+#' @slot survival_prob a vector of 1 or more values for the base rate of annual
+#'   survival probability. If the length of the vector is less than the length
+#'   of the simulation, the last value will be used for all subsequent time steps.
+#'   Hence, if the base rate is constant only a single value need be provided.
+#'   
+#' @slot survival_rainfall_pars numeric vector of length 3 giving the parameters for
+#'   the function relating proportional adjustment of base survival rate to rainfall
+#'   (see Survival).
+#'   
+#' @slot survival_crowding_pars numeric vector of length 3 giving the parameters for
+#'   the function relating proportional adjustment of base survival rate to total
+#'   stand resource use (see Survival).
+#'   
+#' @slot survival_fire_pars numeric vector of length 5 giving the parameters for
+#'   a generalized logistic function relating probability of fire survival to fire
+#'   intensity and tree height (see Survival).
 #' 
 setClass("SpeciesParams",
          slots = c(
@@ -117,11 +145,11 @@ setClass("SpeciesParams",
            external_seed_fn = "ANY",      # will be checked for NULL or function
            
            survival_prob = "numeric",
-           survival.rainfall.pars = "numeric",
-           survival.crowding.pars = "numeric",
-           survival.fire.pars = "numeric",
+           survival_rainfall_pars = "numeric",
+           survival_crowding_pars = "numeric",
+           survival_fire_pars = "numeric",
            
-           non.flammability = "numeric"),
+           non_flammability = "numeric"),
          
          prototype = list(
            name = "unnamed",
@@ -143,11 +171,11 @@ setClass("SpeciesParams",
            external_seed_fn = NULL,
            
            survival_prob = 0.0,
-           survival.rainfall.pars = numeric(3),
-           survival.crowding.pars = numeric(3),
-           survival.fire.pars = numeric(5),
+           survival_rainfall_pars = numeric(3),
+           survival_crowding_pars = numeric(3),
+           survival_fire_pars = numeric(5),
            
-           non.flammability = 0.0)
+           non_flammability = 0.0)
          
          )
 
@@ -259,8 +287,7 @@ setClass("SpeciesParams",
   function(object) .check_matrix(object, "seed_output", 3)
 
 .check_seed_rainfall_pars <-
-  function(object) .check_numeric(object, 'seed_rainfall_pars', 2)
-
+  function(object) .check_numeric(object, "seed_rainfall_pars", 2)
 
 .check_recruit_canopy_fn <-
   function(object) .check_function(object, "recruit_canopy_fn", optional=TRUE)
@@ -284,6 +311,17 @@ setClass("SpeciesParams",
     }
   }
 
+.check_survival_rainfall_pars <-
+  function(object) .check_numeric(object, "survival_rainfall_pars", 3)
+
+.check_survival_crowding_pars <-
+  function(object) .check_numeric(object, "survival_crowding_pars", 3)
+
+.check_survival_fire_pars <-
+  function(object) .check_numeric(object, "survival_fire_pars", 5)
+
+.check_non_flammability <-
+  function(object) .check_numeric(object, "non_flammability", 1, allowAllZeroes=TRUE)
 
 setGeneric("isComplete", function(object) standardGeneric("isComplete"))
 
@@ -336,7 +374,11 @@ setMethod("isComplete",
               .check_seed_rainfall_pars,
               .check_recruit_canopy_fn,
               .check_external_seed_fn,
-              .check_survival_prob)
+              .check_survival_prob,
+              .check_survival_rainfall_pars,
+              .check_survival_crowding_pars,
+              .check_survival_fire_pars,
+              .check_non_flammability)
               
             # run all check_XXX functions and return accumulated error 
             # messages, if any
@@ -363,6 +405,19 @@ setGeneric("hasFunction", function(object, fnName) standardGeneric("hasFunction"
 #' 
 #' @return TRUE if the function slot contains a function object
 #' 
+#' @examples
+#' \dontrun{
+#' params <- new("SpeciesParams", name="test")
+#' 
+#' ## Set one of the optional function objects
+#' params@@recruit_canopy_fn <- function(area) area^(1.1)
+#' 
+#' ## Check for function - partial name is permitted
+#' hasFunction(params, "recruit")
+#' 
+#' ## returns TRUE
+#' }
+#' 
 #' @export
 #' 
 setMethod("hasFunction",
@@ -386,6 +441,13 @@ setGeneric("getFunctionOrElse",
 #' @param fallback fallback function object
 #' 
 #' @return the optional function if present, or the fallback
+#' 
+#' @examples
+#' params <- new("SpeciesParams", "test")
+#' 
+#' ## Ask for the recruit_canopy_fn object. Since we haven't set one
+#' ## we will get the fallback (identity function in this example)
+#' fn <- getFunctionOrElse(params, "recruit_canopy_fn", identity)
 #' 
 #' @export
 #' 

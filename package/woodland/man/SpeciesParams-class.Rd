@@ -6,11 +6,12 @@
 \title{Class to hold species parameters used in simulation.}
 \description{
 \code{SpeciesParams} is an S4 class which defines the species parameters used
-by the \code{tm.site} simulation. This replaces the previous use of a named list
-for the same purpose and provides some type and validity checking of arguments.
-Note that at the moment there are no associated methods to get and set elements
-(as is usually the case for S4 classes), instead you deal with the slots directly.
-Given that this is just a data class that shouldn't be too painful.
+by the \link{code{tmRun}} simulation function. This replaces the previous use of a
+named list for the same purpose and provides some type and validity checking
+of arguments. Note that at the moment there are no associated methods to get
+and set elements (as is usually the case for S4 classes), instead you deal
+with the slots directly. Given that this is just a data class that shouldn't
+be too painful.
 }
 \section{Slots}{
 
@@ -65,15 +66,33 @@ Given that this is just a data class that shouldn't be too painful.
   area.}
 
 \item{\code{external_seed_fn}}{an optional function to return the number of seeds
-of this species entering the stand from external sources in a given year.
-The function should take no arguments and return a single numeric value.}
+  of this species entering the stand from external sources in a given year.
+  The function should take no arguments and return a single numeric value.}
+
+\item{\code{survival_prob}}{a vector of 1 or more values for the base rate of annual
+  survival probability. If the length of the vector is less than the length
+  of the simulation, the last value will be used for all subsequent time steps.
+  Hence, if the base rate is constant only a single value need be provided.}
+
+\item{\code{survival_rainfall_pars}}{numeric vector of length 3 giving the parameters for
+  the function relating proportional adjustment of base survival rate to rainfall
+  (see Survival).}
+
+\item{\code{survival_crowding_pars}}{numeric vector of length 3 giving the parameters for
+  the function relating proportional adjustment of base survival rate to total
+  stand resource use (see Survival).}
+
+\item{\code{survival_fire_pars}}{numeric vector of length 5 giving the parameters for
+a generalized logistic function relating probability of fire survival to fire
+intensity and tree height (see Survival).}
 }}
 \section{Tree growth}{
 
-Changes in tree dimensions are modelled in a very basic fashion. change in tree height
-is modelled as a function of existing height, moisture (rainfall), and stand resource
-use. All other dimensions such as trunk diameter, canopy radius and canopy surface area,
-are derived deterministically from tree height.
+Changes in tree dimensions are modelled in a very basic fashion. change in
+tree height is modelled as a function of existing height, moisture
+(rainfall), and stand resource use. All other dimensions such as trunk
+diameter, canopy radius and canopy surface area, are derived
+deterministically from tree height.
 
 Annual growth in tree height is described by:
 \preformatted{dh = (hmax - height) * g.adj}
@@ -104,5 +123,15 @@ their more extensive root system compared to un-coppiced trees of the same heigh
 
 Seed production of trees is modelled as a function of height, based on a lookup
 matrix with columns: tree height, seed production, proportion retained.
+}
+
+\section{Survival}{
+
+
+The probability of fire survival is modelled as a function of tree height and
+fire intensity using a generalized logistic form:
+\preformatted{psurv = ( 1 / (1 + exp(-( b1 + b2 * intensity + b3 * height^b4 )))^b5 )}
+where
+\code{intensity} is the realized intensity of the fire in the stand
 }
 
