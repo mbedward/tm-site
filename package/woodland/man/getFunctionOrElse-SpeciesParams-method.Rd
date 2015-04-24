@@ -21,10 +21,12 @@ the optional function if present, or the fallback
 Gets an optional function if present, or a fallback function object.
 }
 \examples{
+\dontrun{
 params <- new("SpeciesParams", "test")
 
 ## Ask for the recruit_canopy_fn object. Since we haven't set one
 ## we will get the fallback (identity function in this example)
 fn <- getFunctionOrElse(params, "recruit_canopy_fn", identity)
+}
 }
 

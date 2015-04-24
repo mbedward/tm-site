@@ -1,37 +1,43 @@
-tmdbPlot <- function( tmdb, val=c("mergedarea", "basalarea", "corearea", "resourceuse", "n"), runid=1, 
-          col=c("blue", "green", "purple", "magenta", "cyan"), x.same=TRUE, y.same=TRUE, 
-          show.legend=TRUE, pos.legend=c("left", "right"), plot.total=TRUE, col.total="BLACK" ) {
+#' Plots yearly summed value (across cohorts by species) for a chosen variable.
+#'
+#' @param tmdb an open connection to a \code{\link{tmRun}} output database
+#'
+#' @param val name (character) of the variable to plot. The values plotted
+#'   will be the sum of individual cohort values for each year.
+#'
+#' @param runid a vector of one or more run ID values, each of which will
+#'   be used to retrieve data for a separate plot
+#'
+#' @param col vector of colours for species lines
+#'
+#' @param x.same if TRUE, all plots use the same xlim setting
+#'
+#' @param y.same if TRUE, all plots use the same ylim setting
+#'
+#' @param show.legend if TRUE, legend is added to each plot
+#'
+#' @param pos.legend specifies whether to plot the legend at upper-left or upper-right
+#'   of plot area (default is left)
+#'
+#' @param plot.total if TRUE, and there are two or more species in the results,
+#'   plot the combined value in addition to that for each species
+#'
+#' @param col.total colour to use for plotting total value
+#' 
+#' @export
+#' 
+tmdbPlot <- function(tmdb, 
+                     val=c("mergedarea", "basalarea", "corearea", "resourceuse", "n"), 
+                     runid=1, 
+                     col=c("blue", "green", "purple", "magenta", "cyan"), 
+                     x.same=TRUE, 
+                     y.same=TRUE, 
+                     show.legend=TRUE, 
+                     pos.legend=c("left", "right"), 
+                     plot.total=TRUE, 
+                     col.total="BLACK" ) {
 
-# Plots yearly summed value (across cohorts by species) for a chosen variable.
-#
-# tmdb - an open connection to a \link{\code{tmRun}} output database
-#
-# val - name (as character) of the variable to plot. The values plotted
-#       will be the sum of individual cohort values for each year.
-#
-# runid - a vector of one or more run ID values, each of which will
-#         be used to retrieve data for a separate plot
-#
-# col - vector of colours for species lines
-#
-# x.same - if TRUE, all plots use the same xlim setting
-#
-# y.same - if TRUE, all plots use the same ylim setting
-#
-# show.legend - if TRUE, legend is added to each plot
-#
-# pos.legend - specifies whether to plot the legend at upper-left or upper-right
-#              of plot area (default is left)
-#
-# plot.total - if TRUE, and there are two or more species in the results,
-#              plot the combined value in addition to that for each species
-#
-# col.total - colour to use for plotting total value
 
-  if (!require(RSQLite, quietly=TRUE)) {
-    stop("Can't load the RSQLite package or one of its dependents")
-  }
-  
   if (!tmdbValidate(tmdb, FALSE)) {
     return(invisible(NULL))
   }
@@ -59,14 +65,14 @@ tmdbPlot <- function( tmdb, val=c("mergedarea", "basalarea", "corearea", "resour
   sql <- paste("SELECT RunID, Time, SpeciesID, SUM(", SQL.NAMES[valIndex], ") AS SpValue FROM cohortyearly WHERE RunID IN (",
                paste(runid, collapse=","), ") GROUP BY RunID, Time, SpeciesID")             
                
-  df.data <- dbGetQuery(tmdb, sql)
+  df.data <- RSQLite::dbGetQuery(tmdb, sql)
 
   sql <- paste("SELECT r.ID AS RunID, s.SpeciesID, s.Name FROM species AS s",
                "JOIN paramsets AS p ON s.ID = p.SpeciesSetID",
                "JOIN runs AS r ON p.ID = r.ParamSetID",
                "WHERE r.ID IN (", paste(runid, collapse=","), ") ORDER BY r.ID, s.SpeciesID")
 
-  df.spp <- dbGetQuery(tmdb, sql)
+  df.spp <- RSQLite::dbGetQuery(tmdb, sql)
   
   # check the number of species in the results
   NSPP <- length(unique(df.data$SpeciesID))

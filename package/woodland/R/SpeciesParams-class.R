@@ -1,7 +1,7 @@
 #' Class to hold species parameters used in simulation.
 #' 
 #' \code{SpeciesParams} is an S4 class which defines the species parameters used
-#' by the \link{code{tmRun}} simulation function. This replaces the previous use of a
+#' by the \code{\link{tmRun}} simulation function. This replaces the previous use of a
 #' named list for the same purpose and provides some type and validity checking
 #' of arguments. Note that at the moment there are no associated methods to get
 #' and set elements (as is usually the case for S4 classes), instead you deal
@@ -83,6 +83,8 @@
 #'   for the logistic function relating total stand resource use and current tree height to
 #'   proportional decrease in ideal growth rate (see Tree Growth).
 #'   
+#' @slot coppice logical; TRUE if this species can have coppice growth.
+#'   
 #' @slot coppice_boost_pars numeric vector of length 3 giving the parameters for
 #'   the function relating boosted growth rate of coppiced trees to height before
 #'   coppicing (see Tree Growth).
@@ -123,8 +125,11 @@
 #' @slot survival_fire_pars numeric vector of length 5 giving the parameters for
 #'   a generalized logistic function relating probability of fire survival to fire
 #'   intensity and tree height (see Survival).
+#'   
+#  Allow users to create objects with SpeciesParams(...) but not extend the class
+#' @export SpeciesParams
 #' 
-setClass("SpeciesParams",
+SpeciesParams <- setClass("SpeciesParams",
          slots = c(
            name = "character",
            
@@ -136,6 +141,7 @@ setClass("SpeciesParams",
            growth_rate = "numeric",
            growth_rainfall_pars = "numeric",
            growth_crowding_pars = "numeric",
+           coppice = "logical",
            coppice_boost_pars = "numeric",
            
            max_sprogs = "numeric",
@@ -162,6 +168,7 @@ setClass("SpeciesParams",
            growth_rate = 0.0,
            growth_rainfall_pars = numeric(3),
            growth_crowding_pars = numeric(3),
+           coppice = FALSE,
            coppice_boost_pars = numeric(3),
            
            max_sprogs = 0,
@@ -183,7 +190,12 @@ setClass("SpeciesParams",
 .concat <- function(...) paste(..., collapse="", sep="")
 
 # general checking function for numeric elements
-.check_numeric <- function(object, slotName, requiredLength = -1, allowAllZeroes = FALSE) {
+.check_numeric <- function(object, 
+                           slotName, 
+                           requiredLength = -1, 
+                           allowAllZeroes = FALSE,
+                           allowNA = FALSE) {
+  
   value <- slot(object, slotName)
   
   if (!is(value, "numeric"))
@@ -192,7 +204,10 @@ setClass("SpeciesParams",
   else if (requiredLength > 0 && length(value) != requiredLength)
     .concat(slotName, " should have length ", requiredLength)
   
-  else if (!allowAllZeroes && all(value == 0)) {
+  else if (anyNA(value) && !allowNA)
+    .concat(slotName, " should not have missing values")
+  
+  else if (!allowAllZeroes && all(value == 0, na.rm = !allowNA)) {
     if (length(value) > 1)
       .concat(slotName, " has all zero values")
     else
@@ -277,8 +292,19 @@ setClass("SpeciesParams",
 .check_growth_crowding_pars <- 
   function(object) .check_numeric(object, "growth_crowding_pars", 3)
 
-.check_coppice_boost_pars <- 
-  function(object) .check_numeric(object, "coppice_boost_pars", 3)
+.check_coppice <-
+  function(object) {
+    # Check both the coppice logical flag and coppice_boost_pars 
+    # numeric vector
+    
+    flag <- object@coppice
+    
+    if ( !is(flag, "logical") || length(flag) != 1 || is.na(flag) )
+      "coppice should be TRUE or FALSE"
+    
+    else if (flag)
+      .check_numeric(object, "coppice_boost_pars", 3)
+  }
 
 .check_max_sprogs <-
   function(object) .check_numeric(object, "max_sprogs", 1)
@@ -368,7 +394,7 @@ setMethod("isComplete",
               .check_growth_rate,
               .check_growth_rainfall_pars,
               .check_growth_crowding_pars,
-              .check_coppice_boost_pars,
+              .check_coppice,
               .check_max_sprogs,
               .check_seed_output,
               .check_seed_rainfall_pars,
@@ -443,11 +469,13 @@ setGeneric("getFunctionOrElse",
 #' @return the optional function if present, or the fallback
 #' 
 #' @examples
+#' \dontrun{
 #' params <- new("SpeciesParams", "test")
 #' 
 #' ## Ask for the recruit_canopy_fn object. Since we haven't set one
 #' ## we will get the fallback (identity function in this example)
 #' fn <- getFunctionOrElse(params, "recruit_canopy_fn", identity)
+#' }
 #' 
 #' @export
 #' 

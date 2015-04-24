@@ -31,6 +31,6 @@ tmdbGetSplat <- function (tmdb, runid=1, time)
   	    "Time =", time, 
   	    "ORDER BY SpeciesID ASC, CanopyRadius DESC")
   	    
-    return( dbGetQuery(tmdb, sql) )
+    return( RSQLite::dbGetQuery(tmdb, sql) )
   }
 }

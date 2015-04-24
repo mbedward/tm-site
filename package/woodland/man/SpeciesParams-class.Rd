@@ -2,11 +2,12 @@
 % Please edit documentation in R/SpeciesParams-class.R
 \docType{class}
 \name{SpeciesParams-class}
+\alias{SpeciesParams}
 \alias{SpeciesParams-class}
 \title{Class to hold species parameters used in simulation.}
 \description{
 \code{SpeciesParams} is an S4 class which defines the species parameters used
-by the \link{code{tmRun}} simulation function. This replaces the previous use of a
+by the \code{\link{tmRun}} simulation function. This replaces the previous use of a
 named list for the same purpose and provides some type and validity checking
 of arguments. Note that at the moment there are no associated methods to get
 and set elements (as is usually the case for S4 classes), instead you deal
@@ -44,6 +45,8 @@ be too painful.
 \item{\code{growth_crowding_pars}}{numeric vector of length 3 giving the parameters
   for the logistic function relating total stand resource use and current tree height to
   proportional decrease in ideal growth rate (see Tree Growth).}
+
+\item{\code{coppice}}{logical; TRUE if this species can have coppice growth.}
 
 \item{\code{coppice_boost_pars}}{numeric vector of length 3 giving the parameters for
   the function relating boosted growth rate of coppiced trees to height before
@@ -83,8 +86,8 @@ be too painful.
   stand resource use (see Survival).}
 
 \item{\code{survival_fire_pars}}{numeric vector of length 5 giving the parameters for
-a generalized logistic function relating probability of fire survival to fire
-intensity and tree height (see Survival).}
+  a generalized logistic function relating probability of fire survival to fire
+  intensity and tree height (see Survival).}
 }}
 \section{Tree growth}{
 

@@ -11,7 +11,7 @@ Blah blah blah
 \section{Simulation function}{
 
 
-Some words about running a simulation with \link{\code{tmRun}}...
+Some words about running a simulation with \code{\link{tmRun}}...
 }
 
 \section{Utility functions}{

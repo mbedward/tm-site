@@ -18,11 +18,60 @@
 #'   \item Fire (possible mortality and reduction of tree height)
 #'   \item Report cohort statistics
 #' }
+#' 
 #'
 #' @param Spp either a single object or a \code{list} of objects
 #'   of class \code{\linkS4class{SpeciesParams}} defining one or more species
 #' 
+#' @param initial.cohorts numeric matrix with 4 columns: 
+#'   species index, age, height, number of trees.
+#'   For simulations with a single species the species index should be 1, while
+#'   for multiple species the index value is the position in the list
+#'   passed to the \code{Spp} argument.
+#'   
+#' @param rain numeric vector of annual rainfall values. The length of this
+#'   vector determines the number of years in the simulation.
+#'   
+#' @param scheduled.fires numeric vector of fire intensity values. The scale is
+#'   user-defined. If provided, the \code{fire.func} argument must also be present.
+#'   
+#' @param fire.func a function taking two numeric arguments (flammable stand proportion
+#'   and incoming fire intensity) and returning a single numeric value for realized
+#'   fire intensity
+#'   
+#' @param fire.canopy.func a function taking a single numeric argument for summed
+#'   core canopy area, and returning a (possibly) transformed area value. If not provided,
+#'   untransformed canopy area will be used.
+#'   
+#' @param the probability that fire will occur before recruitment in any given year.
+#'   The default value (0) specifies that fires always occur later than recruitment.
+#'   
+#' @param overlap.matrix WRITE ME !
+#' 
+#' @param ov.gen WRITE ME !
+#' 
+#' @param recruitment WRITE ME !
+#' 
+#' @param thinning WRITE ME !
+#' 
+#' @param special WRITE ME !
+#' 
+#' @param seedling.survival WRITE ME !
+#' 
+#' @param session.settings WRITE ME !
+#' 
+#' @param database an optional existing SQLite database connection to write results
+#'   and metadata to. If not provided, a new database will be created.
+#'   
+#' @return a connection to the output SQLite database. If the \code{database}
+#'   argument was NULL (default) then this will point to a temporary file which
+#'   can be saved using the \code{\link{tmdbSave}} function. If an open 
+#'   connection to an existing database was provided via the \code{database}
+#'   argument, then this same connection will be returned.
+#' 
 #' @export
+#' 
+#' @importFrom dplyr group_by summarise %>%
 #' 
 tmRun <- function (Spp, 
                    initial.cohorts, 
@@ -40,6 +89,8 @@ tmRun <- function (Spp,
                    session.settings=NULL, 
                    database=NULL )
 {
+  
+  requireNamespace("RSQLite", quietly = FALSE)
 
   # Programming notes
   # 
@@ -62,14 +113,9 @@ tmRun <- function (Spp,
   #
   # 7. Long SQL query text is created once then re-used.
   #
-  # 8. For yearly cohort data, dbBeginTransaction and dbCommit are used resulting
+  # 8. For yearly cohort data, dbBegin and dbCommit are used resulting
   #    in slightly faster output than with SQLite's default auto-commit mode.
-  
-  # ====================================================================================
-  #  Dependencies
-  # ====================================================================================
-  
-  require(RSQLite)
+
   
   # ====================================================================================
   #  Get the names of objects passed as args. Any arguments that are expressions are
@@ -132,9 +178,9 @@ tmRun <- function (Spp,
   }
   
   HAS.HT.DBH.PARS <- logical(NUM.SPP)
-  for (i in 1:NUM.SPP) HAS.HT.DBH.PARS[i] <- !is.null(Spp[[i]]@ht_dbh_pars)
+  for (i in 1:NUM.SPP) HAS.HT.DBH.PARS[i] <- !is.null(Spp[[i]]@height_dbh_pars)
     
-  HAS.EXTERNAL.SEED.FUNC <- lapply(Spp, 
+  HAS.EXTERNAL.SEED.FUNC <- sapply(Spp, 
                                    function(sp) hasFunction(sp, "external_seed_fn"))
   
   # all species flag
@@ -226,14 +272,17 @@ tmRun <- function (Spp,
   # ====================================================================================  
   ConnectToDatabase <- function() {
     if (!is.null(database)) {
-      DBCON <<- database
+      con <- database
       
     } else { 
-      DBCON <<- CreateNewDatabase()
+      con <- CreateNewDatabase()
     }
     
     # Store parameter metadata. This also sets the global RUNID variable
-    WriteMetadata()
+    WriteMetadata(con)
+    
+    # Return connection
+    con
   }
   
   # ====================================================================================
@@ -242,10 +291,10 @@ tmRun <- function (Spp,
   #  seem to enforce them (perhaps have to recompile the package ?).
   # ====================================================================================  
   CreateNewDatabase <- function() {
-    con <- dbConnect( dbDriver("SQLite"), tempfile() )
+    con <- RSQLite::dbConnect( RSQLite::SQLite(), tempfile() )
     
     # Create cohort annual data table
-    dbGetQuery(con,
+    RSQLite::dbGetQuery(con,
                paste("CREATE TABLE cohortyearly (",
                      "RunID INTEGER REFERENCES runs(ID),",
                      "Time INTEGER,",
@@ -267,7 +316,7 @@ tmRun <- function (Spp,
                      "PRIMARY KEY (RunID, Time, CohortID) )"))
     
     # Create cohort summary table
-    dbGetQuery(con,
+    RSQLite::dbGetQuery(con,
                paste("CREATE TABLE cohortsummary (",
                      "RunID INTEGER REFERENCES runs(ID),",
                      "CohortID INTEGER,",
@@ -288,7 +337,7 @@ tmRun <- function (Spp,
                      "PRIMARY KEY (RunID, CohortID) )"))
     
     # Create the common data table
-    dbGetQuery(con,
+    RSQLite::dbGetQuery(con,
                paste("CREATE TABLE commondata (",
                      "RunID INTEGER REFERENCES runs(ID),",
                      "Time INTEGER,",
@@ -303,7 +352,7 @@ tmRun <- function (Spp,
                      "PRIMARY KEY (RunID, Time) )"))
     
     # Create the run description table
-    dbGetQuery(con,
+    RSQLite::dbGetQuery(con,
                paste("CREATE TABLE runs (",
                      "ID INTEGER PRIMARY KEY,",
                      "ParamSetID INTEGER REFERENCES paramsets(ID),",
@@ -311,7 +360,7 @@ tmRun <- function (Spp,
                      "UNIQUE(ParamSetID, Replicate) )"))
     
     # Create the param sets table
-    dbGetQuery(con, 
+    RSQLite::dbGetQuery(con, 
                paste("CREATE TABLE paramsets (",
                      "ID INTEGER PRIMARY KEY,",
                      "SpeciesSetID INTEGER REFERENCES species(ID),",
@@ -327,7 +376,7 @@ tmRun <- function (Spp,
                      "OverlapMatrix TEXT )"))
     
     # Create the species table that lists species IDs and names
-    dbGetQuery(con,
+    RSQLite::dbGetQuery(con,
                paste("CREATE TABLE species (",
                      "ID INTEGER,",
                      "SpeciesID INTEGER,",
@@ -338,7 +387,7 @@ tmRun <- function (Spp,
     # This has a one-to-one relationship with records in the paramsets table and
     # the only reason we use a separate table is to avoid getting loads of binary
     # crap returned when we do queries with "select * from paramsets".
-    dbGetQuery(con,
+    RSQLite::dbGetQuery(con,
                paste("CREATE TABLE paramobjects (",
                      "ID INTEGER PRIMARY KEY REFERENCES paramsets(ID),",
                      "Data BLOB )"))
@@ -351,20 +400,20 @@ tmRun <- function (Spp,
   #  Helper function - Store run metadata. This is called after the database has been
   #  opened or created and the RUNID value has been set.
   # ====================================================================================
-  WriteMetadata <- function() {
-    # look for the species combination in the species table
-    df <- dbGetQuery(DBCON, "SELECT ID, SpeciesID, Name FROM species order by ID, SpeciesID")
-    if (nrow(df) == 0) {
-      found <- FALSE
-    } else {
-      l <- unstack(df, Name ~ ID)
-      found <- sapply(l, function(x) length(x) == NUM.SPP && all(x == SP.NAMES) )
-    }
+  WriteMetadata <- function(dbcon) {
     
-    if (!any(found)) {
+    # look for the species combination in the species table
+    df <- RSQLite::dbGetQuery(
+      dbcon, "SELECT ID, SpeciesID, Name FROM species order by ID, SpeciesID")
+    
+    matches <- df %>%
+      group_by(ID) %>%
+      summarise(found = all(Name == SP.NAMES))
+    
+    if (!any(matches$found)) {
       # record this new species combination
       spSetID <- 1
-      df <- dbGetQuery(DBCON, "SELECT MAX(ID) FROM species")
+      df <- RSQLite::dbGetQuery(dbcon, "SELECT MAX(ID) FROM species")
       if (!is.na(df[1,1])) {
         spSetID <- df[1,1] + 1
       }
@@ -372,16 +421,16 @@ tmRun <- function (Spp,
       for (spid in 1:NUM.SPP) {
         sql <- paste("INSERT INTO species (ID, SpeciesID, Name) VALUES (",
                      paste(spSetID, spid, WrapText(SP.NAMES[spid]), sep=","), ")", sep="")
-        dbGetQuery(DBCON, sql)
+        RSQLite::dbGetQuery(dbcon, sql)
       }
     } else { 
       # integrity check
-      if (sum(found) != 1) {
+      if (sum(matches$found) != 1) {
         stop("More than one set in the species table matches. This should never happen")
       }
       
       # get the id of the existing combination 
-      spSetID <- as.integer( names(l)[found] )
+      spSetID <- matches$ID[ matches$found ]
     }
     
     # search for this parameter combination in the paramsets table
@@ -397,27 +446,27 @@ tmRun <- function (Spp,
                  " AND SeedSurv = ", WrapText(ARG.INFO["seedSurv", "obj.name"]), 
                  " AND OverlapMatrix = ", WrapText(ARG.INFO["overlap", "obj.name"]), sep = "")
     
-    df <- dbGetQuery(DBCON, sql)
+    df <- RSQLite::dbGetQuery(dbcon, sql)
     
     if (nrow(df) == 0) {
       # new combination: assign a param set ID, store the names and store a 
       # snapshot of the param objects
       paramSetID <- 1
-      df <- dbGetQuery(DBCON, "SELECT MAX(ID) FROM paramsets")
+      df <- RSQLite::dbGetQuery(dbcon, "SELECT MAX(ID) FROM paramsets")
       if (!is.na(df[1,1])) {
         paramSetID <- df[1,1] + 1
       }
       
       # (note the use of as.list(ARG.INFO$obj.name) to ensure that we get
       # arg object names in separate columns)
-      dbGetPreparedQuery(DBCON, 
+      RSQLite::dbGetPreparedQuery(dbcon, 
                          paste("INSERT INTO paramsets",
                                "(ID, SpeciesSetID, InitialCohorts, Rain, Fire, FireFunc, FireCanopyFunc, FireEarlyProb,",
                                "Thinning, Special, SeedSurv, OverlapMatrix)",
                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
                          data.frame(paramSetID, spSetID, as.list(ARG.INFO$obj.name)))
       
-      StoreParamSnapshot(paramSetID)
+      StoreParamSnapshot(dbcon, paramSetID)
       
     } else {
       # existing combination
@@ -425,7 +474,7 @@ tmRun <- function (Spp,
     }
     
     # Record the run information in the runs table
-    df <- dbGetQuery(DBCON,
+    df <- RSQLite::dbGetQuery(dbcon,
                      paste("SELECT MAX(Replicate) FROM runs WHERE ParamSetID =", paramSetID))
     
     repNum <- 1
@@ -433,11 +482,11 @@ tmRun <- function (Spp,
       repNum <- df[1,1] + 1
     }
     
-    dbGetQuery(DBCON,
+    RSQLite::dbGetQuery(dbcon,
                paste("INSERT INTO runs (ParamSetID, Replicate) VALUES (", paramSetID, ",", repNum, ")"))
     
     # Finally retrieve the global RUNID value
-    df <- dbGetQuery(DBCON,
+    df <- RSQLite::dbGetQuery(dbcon,
                      paste("SELECT ID FROM runs WHERE ParamSetID =", paramSetID, "AND Replicate =", repNum))
     
     if (nrow(df) != 1 || is.na(df[1,1])) {
@@ -452,7 +501,7 @@ tmRun <- function (Spp,
   #  Helper function - Store a snapshot of the param objects in binary form in the
   #  paramobjects database table
   # ====================================================================================
-  StoreParamSnapshot <- function(paramSetID) {
+  StoreParamSnapshot <- function(dbcon, paramSetID) {
     params <- list(SpeciesParams=Spp, initial.cohorts=initial.cohorts, rain=rain, fire=scheduled.fires, 
                    fire.func=fire.func, thinning=thinning, special=special, seedling.survival=seedling.survival, 
                    overlap.matrix=overlap.matrix, ov.gen=ov.gen, recruitment=recruitment) 
@@ -462,8 +511,9 @@ tmRun <- function (Spp,
     # Using a dbGetPreparedQuery seems to work with large blobs of param data whereas using
     # dbGetQuery sometimes fails. Also note the WrapText function isn't required when using
     # dbGetPreparedQuery.
-    dbGetQuery(DBCON, "INSERT INTO paramobjects (ID, Data) VALUES (?, ?)",
-               data.frame(ID=paramSetID, Data=object.data))
+    RSQLite::dbGetPreparedQuery(dbcon, 
+                       "INSERT INTO paramobjects (ID, Data) VALUES (?, ?)",
+                       data.frame(ID=paramSetID, Data=object.data, stringsAsFactors=FALSE))
   }
   
   
@@ -510,7 +560,7 @@ tmRun <- function (Spp,
     dbh <- 0
     basal.area <- 0
     if (HAS.HT.DBH.PARS[spID]) {
-      pars <- Spp[[spID]]@ht_dbh_pars
+      pars <- Spp[[spID]]@height_dbh_pars
       dbh <- exp(pars[1] + pars[2] / {pars[3] + cohort.data[ colHeight ]})
       basal.area <- pi * (dbh/200)^2 * cohort.data[ colN ]
     }
@@ -564,16 +614,16 @@ tmRun <- function (Spp,
   # ====================================================================================
   #  Helper function - Archive yearly data and update the summary table for all cohorts
   # ====================================================================================
-  WriteCohortData <- function() {
+  WriteCohortData <- function(dbcon) {
     # NB we are only storing 'core.area.general' (the core area of that cohort 
     # calculated using the ov.gen parameter (default=0))
     
-    dbBeginTransaction( DBCON )
-    dbSendPreparedQuery(DBCON, SQL.WriteCohortData,
+    RSQLite::dbBegin( dbcon )
+    RSQLite::dbSendPreparedQuery(dbcon, SQL.WriteCohortData,
                         as.data.frame(cbind(RUNID, YEAR, 
                                             Cohorts[ , c(colID, colSpID, colAge, colHeight, colDBH, colBasalArea, colN, colResourceUse, colCanopyRadius, 
                                                          colCoppiceStage, colFormerHt, colCoppiceOn, colGrowthRate, colSurvP, colGeneralCoreArea), drop=FALSE ]))) 
-    dbCommit( DBCON )
+    RSQLite::dbCommit( dbcon )
     
     
     irows <- match(Cohorts[ , colID], CohortSummary[1:TOTAL.COHORTS, cscolID])
@@ -594,7 +644,7 @@ tmRun <- function (Spp,
   # ====================================================================================
   #  Helper function - Write out the end-of-simulation summary data
   # ====================================================================================
-  WriteSummaryData <- function() {
+  WriteSummaryData <- function(dbcon) {
     common.data <- cbind(RUNID, 1:YEAR, 
                          common.resource.use[1:YEAR], 
                          common.core.area[1:YEAR], 
@@ -605,9 +655,9 @@ tmRun <- function (Spp,
                          flammable.proportions[1:YEAR], 
                          seedling.survival[1:YEAR])
     
-    dbWriteTable(DBCON, "commondata", as.data.frame(common.data), row.names=FALSE, append=TRUE)
+    RSQLite::dbWriteTable(dbcon, "commondata", as.data.frame(common.data), row.names=FALSE, append=TRUE)
     
-    dbWriteTable(DBCON, "cohortsummary", as.data.frame(CohortSummary[1:TOTAL.COHORTS, ]), row.names=FALSE, append=TRUE)
+    RSQLite::dbWriteTable(dbcon, "cohortsummary", as.data.frame(CohortSummary[1:TOTAL.COHORTS, ]), row.names=FALSE, append=TRUE)
   }
   
   # ====================================================================================
@@ -737,7 +787,7 @@ tmRun <- function (Spp,
   
   # Connect to the output database. This will be either a user-supplied database or a 
   # newly created one.
-  ConnectToDatabase()
+  DBCON <- ConnectToDatabase()
   
   # Add the initial cohorts to the summary table in the output database
   for ( i in 1:nrow(Cohorts) )
@@ -748,7 +798,7 @@ tmRun <- function (Spp,
   
   # Write the initial cohorts to the output database as year 0 data
   YEAR <- 0
-  WriteCohortData()
+  WriteCohortData(DBCON)
   
   # create a 'no fires' fire vector if a scheduled fires vector was not provided
   #
@@ -760,12 +810,11 @@ tmRun <- function (Spp,
   else
   {
     # if a fire vector was provided then a fire function must be too
-    if ( is.null( fire.func ) ) stop( "Bummer: fire vector provided but fire.func is missing" )    
+    if ( is.null( fire.func ) ) 
+      stop( "scheduled.fires argument was provided but fire.func is missing" )    
     
-    if ( length(scheduled.fires) != length(rain) ) stop("OOPS - Hey, the scheduled fires vec is not the same length as the rain vec!")
-    #      scheduled.fires <- c(scheduled.fires, rep(0, length(rain) - length(scheduled.fires)))
-    #      print ( paste ( "The scheduled fires vec was shorter than the rain.vec and the former has been topped up with zeros" ) ) 
-    #      NB I turned the above topping up thing off because safer to do it manually so know what's what. 
+    if ( length(scheduled.fires) != length(rain) ) 
+      scheduled.fires <- c(scheduled.fires, rep(0, length(rain) - length(scheduled.fires)))
   }
   
   
@@ -1047,10 +1096,10 @@ tmRun <- function (Spp,
       #==============================================================
       h <- Cohorts[i, colHeight]
       former.h <- Cohorts[i, colFormerHt]
-      adj.pars <- pars$growth.rainfall.pars
+      adj.pars <- pars@growth_rainfall_pars
       g.rain.adj <- 1 / {1 + exp( -{ adj.pars[1] + adj.pars[2] * rain[YEAR] * h^adj.pars[3] } ) }
       
-      adj.pars <- pars$growth.crowding.pars
+      adj.pars <- pars@growth_crowding_pars
       g.crowd.adj <- 1 / {1 + exp( -{adj.pars[1] + adj.pars[2] * total.resource.use * h^adj.pars[3]} ) }
       
       # Now, if you are a euc with coppicing turned on and you're still <70% of former(max) ht, your growth rate is 
@@ -1152,7 +1201,7 @@ tmRun <- function (Spp,
         
         if ( HAS.EXTERNAL.SEED.FUNC[spID] )
         {
-          seed <- seed + pars$external.seed.func()
+          seed <- seed + (pars@external_seed_fn)()
         }
         
         # rainfall effect
@@ -1367,7 +1416,7 @@ tmRun <- function (Spp,
     #==============================================================
     
     if (nrow(Cohorts) > 0) {
-      WriteCohortData()
+      WriteCohortData(DBCON)
       Cohorts[, colAge] <- Cohorts[, colAge] + 1
     }
     
@@ -1386,7 +1435,7 @@ tmRun <- function (Spp,
     
   }  # END OF yearly loop
   
-  WriteSummaryData()
+  WriteSummaryData(DBCON)
   
   # clean up and return the connection object for the output database
   gc()

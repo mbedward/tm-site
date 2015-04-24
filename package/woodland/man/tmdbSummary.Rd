@@ -2,7 +2,7 @@
 % Please edit documentation in R/tmdbSummary.R
 \name{tmdbSummary}
 \alias{tmdbSummary}
-\title{Generate a summary of the contents of a \link{\code{tmRun}} output database.}
+\title{Generate a summary of the contents of a \code{\link{tmRun}} output database.}
 \usage{
 tmdbSummary(tmdb)
 }
@@ -13,7 +13,7 @@ tmdbSummary(tmdb)
 a `data.frame` of summary data describing the simulation parameters
 }
 \description{
-Generate a summary of the contents of a \link{\code{tmRun}} output database.
+Generate a summary of the contents of a \code{\link{tmRun}} output database.
 }
 \examples{
 \dontrun{

@@ -1,9 +1,13 @@
+#' TODO - write me !
+#' 
+#' @export
+#' 
 tmdbPlotMergedArea <- function(tmdb, runid, x.same, y.same) {
 
   sql <- paste( "SELECT RunID, Time, MergedArea FROM commondata WHERE RunID IN (",
                 paste(runid, collapse=","), ") GROUP BY RunID, Time" )
 
-  df.data <- dbGetQuery(tmdb, sql)
+  df.data <- RSQLite::dbGetQuery(tmdb, sql)
 
   ID.PRESENT <- runid %in% df.data$RunID
   NPLOTS <- sum(ID.PRESENT)

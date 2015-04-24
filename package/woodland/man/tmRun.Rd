@@ -12,6 +12,53 @@ tmRun(Spp, initial.cohorts, rain, scheduled.fires = NULL, fire.func = NULL,
 \arguments{
 \item{Spp}{either a single object or a \code{list} of objects
   of class \code{\linkS4class{SpeciesParams}} defining one or more species}
+
+\item{initial.cohorts}{numeric matrix with 4 columns:
+  species index, age, height, number of trees.
+  For simulations with a single species the species index should be 1, while
+  for multiple species the index value is the position in the list
+  passed to the \code{Spp} argument.}
+
+\item{rain}{numeric vector of annual rainfall values. The length of this
+  vector determines the number of years in the simulation.}
+
+\item{scheduled.fires}{numeric vector of fire intensity values. The scale is
+  user-defined. If provided, the \code{fire.func} argument must also be present.}
+
+\item{fire.func}{a function taking two numeric arguments (flammable stand proportion
+  and incoming fire intensity) and returning a single numeric value for realized
+  fire intensity}
+
+\item{fire.canopy.func}{a function taking a single numeric argument for summed
+  core canopy area, and returning a (possibly) transformed area value. If not provided,
+  untransformed canopy area will be used.}
+
+\item{overlap.matrix}{WRITE ME !}
+
+\item{ov.gen}{WRITE ME !}
+
+\item{recruitment}{WRITE ME !}
+
+\item{thinning}{WRITE ME !}
+
+\item{special}{WRITE ME !}
+
+\item{seedling.survival}{WRITE ME !}
+
+\item{session.settings}{WRITE ME !}
+
+\item{database}{an optional existing SQLite database connection to write results
+  and metadata to. If not provided, a new database will be created.}
+
+\item{the}{probability that fire will occur before recruitment in any given year.
+  The default value (0) specifies that fires always occur later than recruitment.}
+}
+\value{
+a connection to the output SQLite database. If the \code{database}
+  argument was NULL (default) then this will point to a temporary file which
+  can be saved using the \code{\link{tmdbSave}} function. If an open
+  connection to an existing database was provided via the \code{database}
+  argument, then this same connection will be returned.
 }
 \description{
 \code{tmRun} simulates the dynamics of cohorts of one or more tree species

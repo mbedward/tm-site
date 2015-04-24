@@ -1,0 +1,61 @@
+---
+title: "Model description"
+author: "Michael Bedward, Karen Ross"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Description of the simulation}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+The woodland package contains a demographic stand model in which growth, survival and recruitment are influenced by rainfall, competition and disturbance (fire, grazing or tree removal). Different woodland species or functional types can be modelled as pure or mixed stands. The model follows cohorts of trees in a single stand occupying an environmentally homogeneous one hectare site. 
+
+Each cohort is described by its species, age, height and the number of individuals. Other attributes (canopy radius and crown spheroid surface area), are calculated from tree height using deterministic relationships provided to the model as a look-up table. Canopy radius is used to calculate core canopy area (the central 2-D projected area of a canopy) which influences recruitment (and fire) in the model. Core canopy area is derived using a parameter overlap which defines the outer portion of the canopy radius that may be overlapped by the canopies of new recruits. Resource use is the contribution of each individual tree of a given height to total resource use or competition in the stand which influences growth and survival in the model. We use crown spheroid surface area (surface areas of the oblate spheroids depicting each crown summed over all cohorts), as a surrogate for total resource demand (competition) in the stand. Rainfall and competition constraints on growth and survival are applied using inverse logit functions of the form:
+
+$$
+x_t = logit^{-1}( \alpha + \beta_0 * radius_t + \beta_1 * {height_t}^{\beta_2} )^{\beta_3}
+$$
+
+
+## Vignette Info
+
+Note the various macros within the `vignette` setion of the metadata block above. These are required in order to instruct R how to build the vignette. Note that you should change the `title` field and the `\VignetteIndexEntry` to match the title of your vignette.
+
+## Styles
+
+The `html_vignette` template includes a basic CSS theme. To override this theme you can specify your own CSS in the document metadata as follows:
+
+    output: 
+      rmarkdown::html_vignette:
+        css: mystyles.css
+
+## Figures
+
+The figure sizes have been customised so that you can easily put two images side-by-side. 
+
+```{r, fig.show='hold'}
+plot(1:10)
+plot(10:1)
+```
+
+You can enable figure captions by `fig_caption: yes` in YAML:
+
+    output:
+      rmarkdown::html_vignette:
+        fig_caption: yes
+
+Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
+
+## More Examples
+
+You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
+
+```{r, echo=FALSE, results='asis'}
+knitr::kable(head(mtcars, 10))
+```
+
+Also a quote using `>`:
+
+> "He who gives up [code] safety for [code] speed deserves neither."
+([via](https://twitter.com/hadleywickham/status/504368538874703872))

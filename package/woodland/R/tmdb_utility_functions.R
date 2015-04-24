@@ -1,4 +1,4 @@
-#' Open an output database from the \link{\code{tmRun}} function.
+#' Open an output database from the \code{\link{tmRun}} function.
 #' 
 #' Attempts to open a connection to the given database and, if
 #' successful, checks that the database contains the expected tables
@@ -12,7 +12,7 @@
 #'   
 #' @return the database connection
 #' 
-#' @seealso \link{\code{tmdbOpen}}, \link{\code{tmdbValidate}}
+#' @seealso \code{\link{tmdbOpen}}, \code{\link{tmdbValidate}}
 #' 
 #' @examples
 #' \dontrun{
@@ -123,7 +123,7 @@ tmdbSave <- function (tmdb, dest, reconnect=FALSE)
 
 #' Check that a database of simulation outputs is valid.
 #' 
-#' Checks that a database contains the expected tables for \link{\code{tmRun}}
+#' Checks that a database contains the expected tables for \code{\link{tmRun}}
 #' output and, optionally, prints a summary of the database contents. 
 #' 
 #' @param tmdb an open database connection

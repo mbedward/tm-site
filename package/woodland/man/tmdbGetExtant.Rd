@@ -2,8 +2,7 @@
 % Please edit documentation in R/tmdbGetExtant.R
 \name{tmdbGetExtant}
 \alias{tmdbGetExtant}
-\title{For a given parameter set, identified by its integer ID, finds the number
-of runs in which each modelled species was extant at a specified time.}
+\title{Summarize species extant status}
 \usage{
 tmdbGetExtant(tmdb, paramSetID, time)
 }

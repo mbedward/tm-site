@@ -1,3 +1,5 @@
+#' Summarize species extant status
+#' 
 #' For a given parameter set, identified by its integer ID, finds the number 
 #' of runs in which each modelled species was extant at a specified time. 
 #'
@@ -29,7 +31,7 @@ tmdbGetExtant <- function(tmdb, paramSetID, time) {
 
   # Get the IDs of runs associated with the parameter set
   sql.runs <- paste("SELECT ID FROM runs WHERE ParamSetID =", paramSetID)
-  df.runs <- dbGetQuery(tmdb, sql.runs)
+  df.runs <- RSQLite::dbGetQuery(tmdb, sql.runs)
   NRUNS <- nrow(df.runs)
   if (NRUNS == 0) {
     stop("No runs for parameter set ID", paramSetID)
@@ -45,14 +47,14 @@ tmdbGetExtant <- function(tmdb, paramSetID, time) {
   sp.present.sql <- paste("SELECT DISTINCT SpeciesID FROM cohortyearly",
       "WHERE Time IN (0, 1) AND RunID IN (", paste(df.runs$ID, collapse=","), ")" )
 
-  df <- dbGetQuery(tmdb, sp.present.sql)
+  df <- RSQLite::dbGetQuery(tmdb, sp.present.sql)
   SP.IDS <- sort( unique( df$SpeciesID ) )
   NSPP <- length(SP.IDS)
   
   # Get the species names
   sp.sql <- paste("SELECT Name FROM paramsets AS p JOIN species AS s ON p.SpeciesSetID = s.ID",
       "WHERE p.ID =", paramSetID, "AND SpeciesID IN (", paste(SP.IDS, collapse=","), ") ORDER BY SpeciesID")
-  df <- dbGetQuery(tmdb, sp.sql)
+  df <- RSQLite::dbGetQuery(tmdb, sp.sql)
   SP.NAMES <- df$Name
 
   # Get the data (only RunID and SpeciesID are required)
@@ -61,7 +63,7 @@ tmdbGetExtant <- function(tmdb, paramSetID, time) {
   sql.data <- paste("SELECT DISTINCT RunID, SpeciesID FROM cohortyearly", 
       "WHERE RunID IN (", paste(df.runs$ID, collapse=","), ") AND Time =", time)
 
-  df.data <- dbGetQuery(tmdb, sql.data)
+  df.data <- RSQLite::dbGetQuery(tmdb, sql.data)
 
   if (nrow(df.data) == 0) {
     # no runs with data for the given time
