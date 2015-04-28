@@ -23,15 +23,16 @@ tmRun(Spp, initial.cohorts, rain, scheduled.fires = NULL, fire.func = NULL,
   vector determines the number of years in the simulation.}
 
 \item{scheduled.fires}{numeric vector of fire intensity values. The scale is
-  user-defined. If provided, the \code{fire.func} argument must also be present.}
+  user-defined. If provided, the \code{fire.func} argument must also be
+  present.}
 
-\item{fire.func}{a function taking two numeric arguments (flammable stand proportion
-  and incoming fire intensity) and returning a single numeric value for realized
-  fire intensity}
+\item{fire.func}{a function taking two numeric arguments (flammable stand
+  proportion and incoming fire intensity) and returning a single numeric
+  value for realized fire intensity}
 
-\item{fire.canopy.func}{a function taking a single numeric argument for summed
-  core canopy area, and returning a (possibly) transformed area value. If not provided,
-  untransformed canopy area will be used.}
+\item{fire.canopy.func}{a function taking a single numeric argument for
+  summed core canopy area, and returning a (possibly) transformed area value.
+  If not provided, untransformed canopy area will be used.}
 
 \item{overlap.matrix}{WRITE ME !}
 
@@ -50,8 +51,9 @@ tmRun(Spp, initial.cohorts, rain, scheduled.fires = NULL, fire.func = NULL,
 \item{database}{an optional existing SQLite database connection to write results
   and metadata to. If not provided, a new database will be created.}
 
-\item{the}{probability that fire will occur before recruitment in any given year.
-  The default value (0) specifies that fires always occur later than recruitment.}
+\item{the}{probability that fire will occur before recruitment in any given
+  year. The default value (0) specifies that fires always occur later than
+  recruitment.}
 }
 \value{
 a connection to the output SQLite database. If the \code{database}

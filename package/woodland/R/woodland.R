@@ -12,4 +12,8 @@
 #' 
 #' @docType package
 #' @name woodland
+#' 
+#' @importFrom Rcpp sourceCpp
+#' @useDynLib woodland
+#' 
 NULL

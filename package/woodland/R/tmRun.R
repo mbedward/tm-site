@@ -32,19 +32,21 @@
 #' @param rain numeric vector of annual rainfall values. The length of this
 #'   vector determines the number of years in the simulation.
 #'   
-#' @param scheduled.fires numeric vector of fire intensity values. The scale is
-#'   user-defined. If provided, the \code{fire.func} argument must also be present.
+#' @param scheduled.fires numeric vector of fire intensity values. The scale is 
+#'   user-defined. If provided, the \code{fire.func} argument must also be
+#'   present.
 #'   
-#' @param fire.func a function taking two numeric arguments (flammable stand proportion
-#'   and incoming fire intensity) and returning a single numeric value for realized
-#'   fire intensity
+#' @param fire.func a function taking two numeric arguments (flammable stand 
+#'   proportion and incoming fire intensity) and returning a single numeric
+#'   value for realized fire intensity
 #'   
-#' @param fire.canopy.func a function taking a single numeric argument for summed
-#'   core canopy area, and returning a (possibly) transformed area value. If not provided,
-#'   untransformed canopy area will be used.
+#' @param fire.canopy.func a function taking a single numeric argument for
+#'   summed core canopy area, and returning a (possibly) transformed area value.
+#'   If not provided, untransformed canopy area will be used.
 #'   
-#' @param the probability that fire will occur before recruitment in any given year.
-#'   The default value (0) specifies that fires always occur later than recruitment.
+#' @param the probability that fire will occur before recruitment in any given
+#'   year. The default value (0) specifies that fires always occur later than
+#'   recruitment.
 #'   
 #' @param overlap.matrix WRITE ME !
 #' 
@@ -72,6 +74,7 @@
 #' @export
 #' 
 #' @importFrom dplyr group_by summarise %>%
+#' @importFrom stringr str_trim
 #' 
 tmRun <- function (Spp, 
                    initial.cohorts, 
@@ -661,24 +664,17 @@ tmRun <- function (Spp,
   }
   
   # ====================================================================================
-  #  Helper function - Trim leading and/or trailing whitespace from a string
+  #  Helper function - compare strings ignoring case and leading / trailing white-space
   # ====================================================================================
-  StringTrim <- function( s ) {
-    sub('^[ \t]*([^ \t]*)[ \t]*$', '\\1', s)
+  stringEqualsIgnoreCase <- function( s1, s2 ) {
+    tolower( str_trim(s1) ) == tolower( str_trim(s2) )
   }
   
   # ====================================================================================
-  #  Helper function - String comparison that ignores case and leading or trailing blanks
-  # ====================================================================================
-  StringEquals <- function( s1, s2 ) {
-    tolower( StringTrim(s1) ) == tolower( StringTrim(s2) )
-  }
-  
-  # ====================================================================================
-  #  Helper function - A robust match function for character objects using StringEquals
+  #  Helper function - case-insensitive string match
   # ====================================================================================
   StringMatch <- function( x, table ) {
-    match( tolower( StringTrim(x) ), tolower( StringTrim(table) ) )
+    match( tolower( str_trim(x) ), tolower( str_trim(table) ) )
   }
   
   # ====================================================================================
@@ -707,7 +703,7 @@ tmRun <- function (Spp,
   # A few sections of the model give special treatment to eucalypts (e.g. coppicing)
   is.euc <- logical(NUM.SPP)
   for (i in 1:NUM.SPP) {
-    is.euc[i] <- StringEquals(SP.NAMES[i], "Eucalyptus")
+    is.euc[i] <- stringEqualsIgnoreCase(SP.NAMES[i], "Eucalyptus")
   } 
   
   # If an overlap matrix wasn't provided, create a default one
