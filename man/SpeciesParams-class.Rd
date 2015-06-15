@@ -46,7 +46,7 @@ be too painful.
   for the logistic function relating total stand resource use and current tree height to
   proportional decrease in ideal growth rate (see Tree Growth).}
 
-\item{\code{coppice}}{logical; TRUE if this species can have coppice growth.}
+\item{\code{canCoppice}}{logical; TRUE if this species can have coppice growth.}
 
 \item{\code{coppice_boost_pars}}{numeric vector of length 3 giving the parameters for
   the function relating boosted growth rate of coppiced trees to height before

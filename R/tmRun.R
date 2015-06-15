@@ -8,6 +8,7 @@
 #' annual rainfall and fire occurrence / intensity. The simulation period is
 #' equal to the length of the rainfall vector.
 #' 
+#' @section Order of events:
 #' The order of events in each year of the simulation is:
 #' \enumerate{
 #'   \item Optional special actions (coppice ON)
@@ -19,57 +20,133 @@
 #'   \item Report cohort statistics
 #' }
 #' 
-#'
-#' @param Spp either a single object or a \code{list} of objects
+#' @section Management actions:
+#' The simulation can include management actions: tree thinning (proportional reduction
+#' of numbers in selected cohors), clearing, and height reduction. Conditions can also
+#' be specified to protect cohorts from management actions.
+#' 
+#' Tree thinning in one or more years is enabled by providing a 5-column
+#' data.frame as the \code{thinning} argument, where the columns are: year,
+#' species ID, minimum height, maximum height, number of trees to leave after
+#' thinning. In a thinning year, cohorts corresponding to the species and
+#' height-range are identified; then if the total number of trees across all
+#' such cohorts exceeds the number specified in the thinning matrix, cohorts are
+#' reduced by a uniform proportion.
+#' 
+#' Clearing (complete removal of selected cohorts) and height reduction can be 
+#' specified for selected years of the simulation by providing a 4-column
+#' data.frame as the \code{special} argument, where the columns are: year,
+#' species ID, action name, value. Actions name is one of 'remove' (clearing), 
+#' 'cut' (height reduction) or 'protect' (set protected status of cohorts). 
+#' The meaning of the value column depends on the action specified:
+#'   \describe{
+#'     \item{cut}{value is the new (reduced) height for selected cohorts}
+#'     \item{protect}{value treated as TRUE (set cohorts as protected) if non-zero
+#'       and FALSE (unprotect cohorts) if zero}
+#'     \item{remove}{value is ignored}
+#'   }
+#' Setting cohorts as protected insulates them from thinning, clearing and
+#' height reduction.
+#' 
+#' @section Session settings:
+#' The optional \code{session.settings} argument takes a named list which can 
+#' contain the following elements:
+#' \describe{
+#'   \item{display.time.interval}{(integer) specifies the interval, in simulation years,
+#'     for progress reporting to the console during the simulation.}
+#'   \item{display.fire.data}{(logical) if TRUE, enables printing fire data to 
+#'     the console.}
+#' }
+#' 
+#' 
+#' @param Spp Either a single object or a \code{list} of objects
 #'   of class \code{\linkS4class{SpeciesParams}} defining one or more species
 #' 
-#' @param initial.cohorts numeric matrix with 4 columns: 
+#' @param initial.cohorts Numeric matrix with 4 columns: 
 #'   species index, age, height, number of trees.
 #'   For simulations with a single species the species index should be 1, while
 #'   for multiple species the index value is the position in the list
 #'   passed to the \code{Spp} argument.
 #'   
-#' @param rain numeric vector of annual rainfall values. The length of this
+#' @param rain Numeric vector of annual rainfall values. The length of this
 #'   vector determines the number of years in the simulation.
 #'   
-#' @param scheduled.fires numeric vector of fire intensity values. The scale is 
+#' @param stand.area Area of the stand. This should be expressed in units
+#'   compatible with those used for species dimensions.
+#'   
+#' @param scheduled.fires Numeric vector of fire intensity values. The scale is 
 #'   user-defined. If provided, the \code{fire.func} argument must also be
 #'   present.
 #'   
-#' @param fire.func a function taking two numeric arguments (flammable stand 
+#' @param fire.func Function taking two numeric arguments (flammable stand 
 #'   proportion and incoming fire intensity) and returning a single numeric
 #'   value for realized fire intensity
 #'   
-#' @param fire.canopy.func a function taking a single numeric argument for
+#' @param fire.canopy.func Function taking a single numeric argument for
 #'   summed core canopy area, and returning a (possibly) transformed area value.
 #'   If not provided, untransformed canopy area will be used.
 #'   
-#' @param the probability that fire will occur before recruitment in any given
+#' @param fire.early.prob Probability that fire will occur before recruitment in any given
 #'   year. The default value (0) specifies that fires always occur later than
 #'   recruitment.
 #'   
-#' @param overlap.matrix WRITE ME !
+#' @param overlap.matrix Numeric matrix, with dimensions Nspp x Nspp, specifying the allowable
+#'   overlap between seedlings and established canopies. Values are proportions of canopy radius: 
+#'   with a value \emph{p} in row \emph{i}, col \emph{j} specifying how far seedlings of species \emph{i} 
+#'   can be positioned within an overlying canopy of species \emph{j}. Example, a value of 0.1 
+#'   means that a seedling may establish under the outer 10% (in terms of radius) of a canopy;
+#'   a value of 0 means no seedlings can establish under a canopy; while a value of -0.1 means
+#'   that species are excluded from the canopy and a surrounding buffer of width 10% of canopy
+#'   radius.
 #' 
-#' @param ov.gen WRITE ME !
+#' @param ov.gen For compatibility with previous version of the model. This argument used to
+#'   control allowable canopy overlap for seedling establishment prior to the introduction of
+#'   the \code{overlap.matrix} argument. Now it simply acts as a scale factor for reporting of
+#'   general canopy area but will probably be removed in a subsequent version.
 #' 
-#' @param recruitment WRITE ME !
+#' @param recruitment A logical vector indicating for which years of the simulation recruitment
+#'   may occur. Can also be a numeric vector where 0 means FALSE and all other values
+#'   mean TRUE. If length is less than the simulation period (given by the length of the 
+#'   \code{rain} vector) the last value will apply to all subsequent years. 
 #' 
-#' @param thinning WRITE ME !
+#' @param thinning An optional specification of tree removal (aka thinning) to impose in 
+#'   specified years of the simulation. The object is a data.frame with five columns:
+#'   \enumerate{
+#'     \item year
+#'     \item species integer ID
+#'     \item minimum height of trees to thin
+#'     \item maximum height of trees to thin
+#'     \item total number of trees to leave
+#'   }
+#'   See \strong{Management actions} for details on how thinning is applied.
+#'   
+#' @param special An optional specification of management actions to impose in specified
+#'   years of the simulation. The object is a data.frame with four columns:
+#'   \enumerate{
+#'     \item year
+#'     \item species integer ID
+#'     \item action
+#'     \item value
+#'   }
+#'   See \strong{Management actions} for details on how these actions are applied.
 #' 
-#' @param special WRITE ME !
+#' @param seedling.survival Numeric vector giving the probability of establishment
+#'   for seedlings in each year of the simulation. If length is less than the
+#'   simulation period the last value applies for subsequent years. The probability
+#'   is applied to new seedlings regardless of species, so can be used as a proxy
+#'   for general threats such as grazing.
 #' 
-#' @param seedling.survival WRITE ME !
-#' 
-#' @param session.settings WRITE ME !
+#' @param session.settings Optional named list of settings for blah blah. See 
+#'   \strong{Session settings} for details.
 #' 
 #' @param database an optional existing SQLite database connection to write results
 #'   and metadata to. If not provided, a new database will be created.
 #'   
-#' @return a connection to the output SQLite database. If the \code{database}
-#'   argument was NULL (default) then this will point to a temporary file which
-#'   can be saved using the \code{\link{tmdbSave}} function. If an open 
-#'   connection to an existing database was provided via the \code{database}
-#'   argument, then this same connection will be returned.
+#' @return Returns a connection to the output SQLite database. If the
+#'   \code{database} argument was NULL (default) then this will point to a
+#'   temporary file which can be saved using the \code{\link{tmdbSave}}
+#'   function. If an open connection to an existing database was provided via
+#'   the \code{database} argument, then this same connection will be returned.
 #' 
 #' @export
 #' 
@@ -79,6 +156,7 @@
 tmRun <- function (Spp, 
                    initial.cohorts, 
                    rain, 
+                   stand.area=10000,
                    scheduled.fires=NULL, 
                    fire.func=NULL, 
                    fire.canopy.func=NULL, 
@@ -172,8 +250,6 @@ tmRun <- function (Spp,
   # so that it doesn't end up being <<-'d into the global environment
   RUNID <- NA
   
-  CELL.AREA <- 10000
-  
   NUM.SPP <- length(Spp)
   SP.NAMES <- character(NUM.SPP)
   for (i in 1:NUM.SPP) {
@@ -249,11 +325,6 @@ tmRun <- function (Spp,
   SetSession <- function() {
     if (is.null(session.settings)) {
       session.settings <<- list()
-    }
-    
-    # the 'test.run' option disables all metadata storage if TRUE
-    if (is.null(session.settings$test.run)) {
-      session.settings$test.run <<- FALSE
     }
     
     # the 'display.time.interval' option is a numeric value that sets
@@ -401,10 +472,10 @@ tmRun <- function (Spp,
   
   # ====================================================================================
   #  Helper function - Store run metadata. This is called after the database has been
-  #  opened or created and the RUNID value has been set.
+  #  opened or created. As a side-effect this function also sets the RunID variable.
   # ====================================================================================
   WriteMetadata <- function(dbcon) {
-    
+
     # look for the species combination in the species table
     df <- RSQLite::dbGetQuery(
       dbcon, "SELECT ID, SpeciesID, Name FROM species order by ID, SpeciesID")
@@ -1098,13 +1169,16 @@ tmRun <- function (Spp,
       adj.pars <- pars@growth_crowding_pars
       g.crowd.adj <- 1 / {1 + exp( -{adj.pars[1] + adj.pars[2] * total.resource.use * h^adj.pars[3]} ) }
       
-      # Now, if you are a euc with coppicing turned on and you're still <70% of former(max) ht, your growth rate is 
+      # Now, if you are coppicing and you're still <70% of former(max) ht, your growth rate is 
       # boosted, whereas if you have reached or exceeded 70% of former height your growth rate is normal and
-      # coppicing is turned/stays off (colCoppiceOn=0); and if you're not a euc, your growth rate is normal:
+      # coppicing is turned/stays off (colCoppiceOn=0); and if you're not coppicing, your growth rate is normal:
       
-      if ( is.euc[Cohorts[i, colSpID]] & Cohorts[i, colCoppiceOn] == 1 )  
-        # this is safe as long as former.h is never NA when colCoppiceOn = 1, which should always be true???
+      if ( pars@canCoppice && Cohorts[i, colCoppiceOn] == 1 )  
       {
+        # Make sure that we haven't somehow lost former height value while still coppicing
+        if (is.na(former.h))
+          stop("Coppicing turned on but former height (former.h) is NA")
+        
         if ( h < 0.7 * former.h ) 
           # to introduce a slackening off of the boosting effect due to root area equilibrating with shoot area 
           #which we estimated might happen at 70% of former ht (see coppice spreadsheet)
@@ -1114,13 +1188,16 @@ tmRun <- function (Spp,
           # this equation and the coefficients fitted to it (in coppice.boost.pars) were from a regression of
           # coppice growth data from Mt Pilot, and directly relate a boosted growth rate to a tree's former height.
           Cohorts[i, colGrowthRate] <- adjusted.boosted.gr * g.rain.adj * g.crowd.adj
-        } else if ( h >= 0.7 * former.h ) {
+          
+        } else {  # height >= 0.7 * former.h
           Cohorts[i, colGrowthRate] <- pars@growth_rate * g.rain.adj * g.crowd.adj
           Cohorts[i, colCoppiceOn] <- 0
         }
-      } else {
+        
+      } else {  # not coppicing
         Cohorts[i, colGrowthRate] <- pars@growth_rate * g.rain.adj * g.crowd.adj
       }
+      
       # original 'bodge' curve for height increment vs height
       #h.incr <- max(0, (h * growth.rate * (pars@max_height - h) / pars@max_height) )
       
@@ -1225,11 +1302,11 @@ tmRun <- function (Spp,
         # species) and apply a merging function to calculate total obscuring cover.
         #
         canopy.area <- RECRUIT.CANOPY.FUNC[[spID]]( total.core.area[spID] )
-        gap <- CELL.AREA - canopy.area
+        gap <- stand.area - canopy.area
         
         if ( gap > 0 ) 
         {
-          num.sprogs <- rbinom( 1, num.sprogs, gap / CELL.AREA )
+          num.sprogs <- rbinom( 1, num.sprogs, gap / stand.area )
           
           # finally we imagine that the value for this year for
           # seedling.survival is something like bunnies grazing on 
@@ -1273,7 +1350,7 @@ tmRun <- function (Spp,
       # }
       # and we are using Threshols = 4.5 and b1 = -1.4 
       
-      flammable.area <- CELL.AREA
+      flammable.area <- stand.area
       if (nrow(Cohorts) > 0) {
         total.core.area.post.growth <-
           tapply( apply(Cohorts, 1, function(co) co[colN] * co[colCanopyRadius] * co[colCanopyRadius] * pi ), Cohorts[ , colSpID], sum )
@@ -1286,7 +1363,7 @@ tmRun <- function (Spp,
         merged.area <- fire.canopy.func( sum(total.core.area.post.growth) )
         
         non.flammable.area <- sum( merged.area * total.core.area.post.growth / sum(total.core.area.post.growth) * NON.FLAMMABILITY )
-        flammable.area <- max(0, CELL.AREA - non.flammable.area)
+        flammable.area <- max(0, stand.area - non.flammable.area)
       }
       
       
@@ -1299,7 +1376,7 @@ tmRun <- function (Spp,
       # landscape model, it will be appropriate to bring back this test of fire.prob against runif(1) to 
       # determine whether an ignition actually takes off into a fire.
       
-      flammable.prop <- flammable.area / CELL.AREA
+      flammable.prop <- flammable.area / stand.area
       realised.fire.intensity <- fire.func( flammable.prop, scheduled.fires[YEAR] )
       realised.fires[YEAR] <- realised.fire.intensity
       flammable.proportions[YEAR] <- flammable.prop

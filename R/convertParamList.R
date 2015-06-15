@@ -57,7 +57,7 @@ convertParamList <- function(oldparams) {
   }
   
   # extra params, not present in the old list format
-  sp@coppice <- !all(sp@coppice_boost_pars == 0)
+  sp@canCoppice <- !all(sp@coppice_boost_pars == 0)
   
   sp
 }

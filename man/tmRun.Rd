@@ -4,63 +4,102 @@
 \alias{tmRun}
 \title{Simulates dynamics of a woodland stand.}
 \usage{
-tmRun(Spp, initial.cohorts, rain, scheduled.fires = NULL, fire.func = NULL,
-  fire.canopy.func = NULL, fire.early.prob = 0, overlap.matrix = 0,
-  ov.gen = 0, recruitment = TRUE, thinning = NULL, special = NULL,
+tmRun(Spp, initial.cohorts, rain, stand.area = 10000,
+  scheduled.fires = NULL, fire.func = NULL, fire.canopy.func = NULL,
+  fire.early.prob = 0, overlap.matrix = 0, ov.gen = 0,
+  recruitment = TRUE, thinning = NULL, special = NULL,
   seedling.survival = NULL, session.settings = NULL, database = NULL)
 }
 \arguments{
-\item{Spp}{either a single object or a \code{list} of objects
+\item{Spp}{Either a single object or a \code{list} of objects
   of class \code{\linkS4class{SpeciesParams}} defining one or more species}
 
-\item{initial.cohorts}{numeric matrix with 4 columns:
+\item{initial.cohorts}{Numeric matrix with 4 columns:
   species index, age, height, number of trees.
   For simulations with a single species the species index should be 1, while
   for multiple species the index value is the position in the list
   passed to the \code{Spp} argument.}
 
-\item{rain}{numeric vector of annual rainfall values. The length of this
+\item{rain}{Numeric vector of annual rainfall values. The length of this
   vector determines the number of years in the simulation.}
 
-\item{scheduled.fires}{numeric vector of fire intensity values. The scale is
+\item{stand.area}{Area of the stand. This should be expressed in units
+  compatible with those used for species dimensions.}
+
+\item{scheduled.fires}{Numeric vector of fire intensity values. The scale is
   user-defined. If provided, the \code{fire.func} argument must also be
   present.}
 
-\item{fire.func}{a function taking two numeric arguments (flammable stand
+\item{fire.func}{Function taking two numeric arguments (flammable stand
   proportion and incoming fire intensity) and returning a single numeric
   value for realized fire intensity}
 
-\item{fire.canopy.func}{a function taking a single numeric argument for
+\item{fire.canopy.func}{Function taking a single numeric argument for
   summed core canopy area, and returning a (possibly) transformed area value.
   If not provided, untransformed canopy area will be used.}
 
-\item{overlap.matrix}{WRITE ME !}
+\item{fire.early.prob}{Probability that fire will occur before recruitment in any given
+  year. The default value (0) specifies that fires always occur later than
+  recruitment.}
 
-\item{ov.gen}{WRITE ME !}
+\item{overlap.matrix}{Numeric matrix, with dimensions Nspp x Nspp, specifying the allowable
+  overlap between seedlings and established canopies. Values are proportions of canopy radius:
+  with a value \emph{p} in row \emph{i}, col \emph{j} specifying how far seedlings of species \emph{i}
+  can be positioned within an overlying canopy of species \emph{j}. Example, a value of 0.1
+  means that a seedling may establish under the outer 10% (in terms of radius) of a canopy;
+  a value of 0 means no seedlings can establish under a canopy; while a value of -0.1 means
+  that species are excluded from the canopy and a surrounding buffer of width 10% of canopy
+  radius.}
 
-\item{recruitment}{WRITE ME !}
+\item{ov.gen}{For compatibility with previous version of the model. This argument used to
+  control allowable canopy overlap for seedling establishment prior to the introduction of
+  the \code{overlap.matrix} argument. Now it simply acts as a scale factor for reporting of
+  general canopy area but will probably be removed in a subsequent version.}
 
-\item{thinning}{WRITE ME !}
+\item{recruitment}{A logical vector indicating for which years of the simulation recruitment
+  may occur. Can also be a numeric vector where 0 means FALSE and all other values
+  mean TRUE. If length is less than the simulation period (given by the length of the
+  \code{rain} vector) the last value will apply to all subsequent years.}
 
-\item{special}{WRITE ME !}
+\item{thinning}{An optional specification of tree removal (aka thinning) to impose in
+  specified years of the simulation. The object is a data.frame with five columns:
+  \enumerate{
+    \item year
+    \item species integer ID
+    \item minimum height of trees to thin
+    \item maximum height of trees to thin
+    \item total number of trees to leave
+  }
+  See \strong{Management actions} for details on how thinning is applied.}
 
-\item{seedling.survival}{WRITE ME !}
+\item{special}{An optional specification of management actions to impose in specified
+  years of the simulation. The object is a data.frame with four columns:
+  \enumerate{
+    \item year
+    \item species integer ID
+    \item action
+    \item value
+  }
+  See \strong{Management actions} for details on how these actions are applied.}
 
-\item{session.settings}{WRITE ME !}
+\item{seedling.survival}{Numeric vector giving the probability of establishment
+  for seedlings in each year of the simulation. If length is less than the
+  simulation period the last value applies for subsequent years. The probability
+  is applied to new seedlings regardless of species, so can be used as a proxy
+  for general threats such as grazing.}
+
+\item{session.settings}{Optional named list of settings for blah blah. See
+  \strong{Session settings} for details.}
 
 \item{database}{an optional existing SQLite database connection to write results
   and metadata to. If not provided, a new database will be created.}
-
-\item{the}{probability that fire will occur before recruitment in any given
-  year. The default value (0) specifies that fires always occur later than
-  recruitment.}
 }
 \value{
-a connection to the output SQLite database. If the \code{database}
-  argument was NULL (default) then this will point to a temporary file which
-  can be saved using the \code{\link{tmdbSave}} function. If an open
-  connection to an existing database was provided via the \code{database}
-  argument, then this same connection will be returned.
+Returns a connection to the output SQLite database. If the
+  \code{database} argument was NULL (default) then this will point to a
+  temporary file which can be saved using the \code{\link{tmdbSave}}
+  function. If an open connection to an existing database was provided via
+  the \code{database} argument, then this same connection will be returned.
 }
 \description{
 \code{tmRun} simulates the dynamics of cohorts of one or more tree species
@@ -71,7 +110,8 @@ explicitly modelled. The stand environment is defined by input vectors for
 annual rainfall and fire occurrence / intensity. The simulation period is
 equal to the length of the rainfall vector.
 }
-\details{
+\section{Order of events}{
+
 The order of events in each year of the simulation is:
 \enumerate{
   \item Optional special actions (coppice ON)
@@ -81,6 +121,48 @@ The order of events in each year of the simulation is:
   \item Recruitment (addition of new cohorts)
   \item Fire (possible mortality and reduction of tree height)
   \item Report cohort statistics
+}
+}
+
+\section{Management actions}{
+
+The simulation can include management actions: tree thinning (proportional reduction
+of numbers in selected cohors), clearing, and height reduction. Conditions can also
+be specified to protect cohorts from management actions.
+
+Tree thinning in one or more years is enabled by providing a 5-column
+data.frame as the \code{thinning} argument, where the columns are: year,
+species ID, minimum height, maximum height, number of trees to leave after
+thinning. In a thinning year, cohorts corresponding to the species and
+height-range are identified; then if the total number of trees across all
+such cohorts exceeds the number specified in the thinning matrix, cohorts are
+reduced by a uniform proportion.
+
+Clearing (complete removal of selected cohorts) and height reduction can be
+specified for selected years of the simulation by providing a 4-column
+data.frame as the \code{special} argument, where the columns are: year,
+species ID, action name, value. Actions name is one of 'remove' (clearing),
+'cut' (height reduction) or 'protect' (set protected status of cohorts).
+The meaning of the value column depends on the action specified:
+  \describe{
+    \item{cut}{value is the new (reduced) height for selected cohorts}
+    \item{protect}{value treated as TRUE (set cohorts as protected) if non-zero
+      and FALSE (unprotect cohorts) if zero}
+    \item{remove}{value is ignored}
+  }
+Setting cohorts as protected insulates them from thinning, clearing and
+height reduction.
+}
+
+\section{Session settings}{
+
+The optional \code{session.settings} argument takes a named list which can
+contain the following elements:
+\describe{
+  \item{display.time.interval}{(integer) specifies the interval, in simulation years,
+    for progress reporting to the console during the simulation.}
+  \item{display.fire.data}{(logical) if TRUE, enables printing fire data to
+    the console.}
 }
 }
 

@@ -83,7 +83,7 @@
 #'   for the logistic function relating total stand resource use and current tree height to
 #'   proportional decrease in ideal growth rate (see Tree Growth).
 #'   
-#' @slot coppice logical; TRUE if this species can have coppice growth.
+#' @slot canCoppice logical; TRUE if this species can have coppice growth.
 #'   
 #' @slot coppice_boost_pars numeric vector of length 3 giving the parameters for
 #'   the function relating boosted growth rate of coppiced trees to height before
@@ -141,7 +141,7 @@ SpeciesParams <- setClass("SpeciesParams",
            growth_rate = "numeric",
            growth_rainfall_pars = "numeric",
            growth_crowding_pars = "numeric",
-           coppice = "logical",
+           canCoppice = "logical",
            coppice_boost_pars = "numeric",
            
            max_sprogs = "numeric",
@@ -168,7 +168,7 @@ SpeciesParams <- setClass("SpeciesParams",
            growth_rate = 0.0,
            growth_rainfall_pars = numeric(3),
            growth_crowding_pars = numeric(3),
-           coppice = FALSE,
+           canCoppice = FALSE,
            coppice_boost_pars = numeric(3),
            
            max_sprogs = 0,
@@ -294,13 +294,13 @@ SpeciesParams <- setClass("SpeciesParams",
 
 .check_coppice <-
   function(object) {
-    # Check both the coppice logical flag and coppice_boost_pars 
+    # Check both the canCoppice logical flag and coppice_boost_pars 
     # numeric vector
     
-    flag <- object@coppice
+    flag <- object@canCoppice
     
     if ( !is(flag, "logical") || length(flag) != 1 || is.na(flag) )
-      "coppice should be TRUE or FALSE"
+      "canCoppice should be TRUE or FALSE"
     
     else if (flag)
       .check_numeric(object, "coppice_boost_pars", 3)
