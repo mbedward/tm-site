@@ -117,8 +117,9 @@ functions:
 
 \code{combined.resource.use} is the summed resource use for all extant cohorts.
 
-Trees which have been coppiced have a boosted growth rate which is meant to represent
-their more extensive root system compared to un-coppiced trees of the same height.
+For species where this is applicable, trees which have been coppiced have a
+boosted growth rate which is meant to represent their more extensive root
+system compared to un-coppiced trees of the same height.
 \preformatted{g.boosted = max( g, b1 / (1 + b2 * exp(-b3 * hprev)) )}
 }
 

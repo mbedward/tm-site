@@ -170,32 +170,23 @@ tmRun <- function (Spp,
                    session.settings=NULL, 
                    database=NULL )
 {
-  
   requireNamespace("RSQLite", quietly = FALSE)
 
-  # Programming notes
-  # 
-  # The following hacks are used to speed up simulations:
+  #===============================================================
+  # Magic numbers (TODO: consider moving these to species params)
+  #===============================================================
+  
+  # Growth rate of coppicing trees is boosted to simulate the effect of a larger
+  # root system than would otherwise be the case for trees of the same height.
+  # The boosting effect is applied until trees reach the proportion of their 
+  # former height specified by COPPICE_BOOST_PROP.
   #
-  # 1. Matrices are used in preference to data.frames for internal tables.
-  #
-  # 2. Vectors are used in preference to lists.
-  #
-  # 3. String comparisons are kept out of the yearly loop because they are so
-  #    so slow.
-  #
-  # 4. Output data that are small enough to be cached are only written to the 
-  #    SQLite database at the end of the run.
-  #
-  # 5. '{' is used instead of '(' in numeric expressions with multiple parentheses.
-  #    For some reason R processes '{' nesting slightly faster than '('.
-  #
-  # 6. We take any opportunities to replace for-loops with vector processing.
-  #
-  # 7. Long SQL query text is created once then re-used.
-  #
-  # 8. For yearly cohort data, dbBegin and dbCommit are used resulting
-  #    in slightly faster output than with SQLite's default auto-commit mode.
+  # This proportion is also used When testing tree survival (both base rate and fire)
+  # where probability is a function of tree height. A coppicing tree is treated as 
+  # being at its former height, for the purposes of the probability calculation, if 
+  # its current height is less than this proportion.
+  COPPICE_BOOST_PROP <- 0.7
+  
 
   
   # ====================================================================================
@@ -250,6 +241,8 @@ tmRun <- function (Spp,
   # so that it doesn't end up being <<-'d into the global environment
   RUNID <- NA
   
+  SIMULATION.PERIOD <- length(rain)
+  
   NUM.SPP <- length(Spp)
   SP.NAMES <- character(NUM.SPP)
   for (i in 1:NUM.SPP) {
@@ -297,7 +290,7 @@ tmRun <- function (Spp,
   # as cohorts were added during the simulation. This is a slow operation in R so now
   # we create a matrix with dimensions sufficient for the maximum number of cohorts that
   # can arise in the simulation
-  max.cohorts <- nrow(initial.cohorts) + length(rain)*NUM.SPP
+  max.cohorts <- nrow(initial.cohorts) + SIMULATION.PERIOD * NUM.SPP
   CohortSummary <- matrix(0, nrow=max.cohorts, ncol=16)
   
   cscolRun <- 1; cscolID <- 2; cscolSpID <- 3; cscolStartTime <- 4; cscolStartAge <- 5;
@@ -771,12 +764,6 @@ tmRun <- function (Spp,
   
   SetSession()
   
-  # A few sections of the model give special treatment to eucalypts (e.g. coppicing)
-  is.euc <- logical(NUM.SPP)
-  for (i in 1:NUM.SPP) {
-    is.euc[i] <- stringEqualsIgnoreCase(SP.NAMES[i], "Eucalyptus")
-  } 
-  
   # If an overlap matrix wasn't provided, create a default one
   if (is.null(overlap.matrix) || is.vector(overlap.matrix)) {
     val <- ifelse(is.null(overlap.matrix), 0, overlap.matrix[1])
@@ -825,7 +812,7 @@ tmRun <- function (Spp,
   
   cat( num.initial.cohorts, "initial cohorts \n" )
   
-  max.num.cohorts <- num.initial.cohorts + length(rain)*NUM.SPP
+  max.num.cohorts <- num.initial.cohorts + SIMULATION.PERIOD * NUM.SPP
   
   Cohorts <- matrix(0, nrow=num.initial.cohorts, ncol=NUM.COHORTS.COLS)
   Cohorts[ , colID ] <- 1:num.initial.cohorts
@@ -841,16 +828,16 @@ tmRun <- function (Spp,
   # Declare various global variables and create the database
   # for simulation output.
   #==============================================================
-  common.resource.use <- numeric( length(rain) )
-  common.core.area <- numeric( length(rain) )  # just stores CoreAreaGeneral values
-  common.merged.area <- numeric( length(rain) )
+  common.resource.use <- numeric( SIMULATION.PERIOD )
+  common.core.area <- numeric( SIMULATION.PERIOD )  # just stores CoreAreaGeneral values
+  common.merged.area <- numeric( SIMULATION.PERIOD )
   
   total.core.area <- numeric( NUM.SPP + 1 )
   names.combined <- paste("CombCoreArea", SP.NAMES, sep="")
   names(total.core.area) <- c( names.combined, "CombCoreAreaGeneral")
   
-  realised.fires <- numeric( length(rain) )
-  flammable.proportions <- numeric( length(rain) )
+  realised.fires <- numeric( SIMULATION.PERIOD )
+  flammable.proportions <- numeric( SIMULATION.PERIOD )
   
   # Connect to the output database. This will be either a user-supplied database or a 
   # newly created one.
@@ -871,7 +858,7 @@ tmRun <- function (Spp,
   #
   if ( is.null( scheduled.fires ) ) 
   {
-    scheduled.fires <- numeric( length(rain) )
+    scheduled.fires <- numeric( SIMULATION.PERIOD )
     cat ( "No fires in this simulation \n" )
   }
   else
@@ -880,8 +867,8 @@ tmRun <- function (Spp,
     if ( is.null( fire.func ) ) 
       stop( "scheduled.fires argument was provided but fire.func is missing" )    
     
-    if ( length(scheduled.fires) != length(rain) ) 
-      scheduled.fires <- c(scheduled.fires, rep(0, length(rain) - length(scheduled.fires)))
+    if ( length(scheduled.fires) < SIMULATION.PERIOD ) 
+      scheduled.fires <- c(scheduled.fires, rep(0, SIMULATION.PERIOD - length(scheduled.fires)))
   }
   
   
@@ -889,27 +876,27 @@ tmRun <- function (Spp,
   #
   if ( is.null( seedling.survival ) )
   {
-    seedling.survival <- rep(1, length(rain) )
+    seedling.survival <- rep(1, SIMULATION.PERIOD )
   }
-  else if ( length(seedling.survival) < length(rain) )
+  else if ( length(seedling.survival) < SIMULATION.PERIOD )
   {
-    seedling.survival <- c(seedling.survival, rep(1, length(rain) - length(seedling.survival)))
+    seedling.survival <- c(seedling.survival, rep(1, SIMULATION.PERIOD - length(seedling.survival)))
   }
   
   # if recruitment is a single value convert it to a yearly vector
   if ( length(recruitment) == 1 ) 
   {
-    recruitment <- rep( recruitment, length(rain) )
+    recruitment <- rep( recruitment, SIMULATION.PERIOD )
   }
   # if recruitment is a vector but too short, pad it out with the last value
-  else if ( length(recruitment) < length(rain) )
+  else if ( length(recruitment) < SIMULATION.PERIOD )
   {
     len <- length(recruitment)
-    recruitment <- c( recruitment, rep(tail(recruitment, 1), length(rain) - length(recruitment)) )
+    recruitment <- c( recruitment, rep(tail(recruitment, 1), SIMULATION.PERIOD - length(recruitment)) )
   }
   
   # check the thinning arg, if provided, and create a flag array to identify thinning years
-  is.thinning.year <- logical( length(rain) )
+  is.thinning.year <- logical( SIMULATION.PERIOD )
   if ( ! is.null( thinning ) )
   {
     if ( !is.matrix( thinning ) ) stop( "Bummer: Expected a 5 col matrix for thinning" )
@@ -923,7 +910,7 @@ tmRun <- function (Spp,
     
     years <- thinning[ , thinColYear ]
     # just in case...
-    years <- years[ years <= length(rain) ]
+    years <- years[ years <= SIMULATION.PERIOD ]
     
     # Check for duplication of year + spID with overlapping height ranges
     # Note: since we added the option to treat all species (species ID = NA)
@@ -987,7 +974,7 @@ tmRun <- function (Spp,
   }
   
   # check the 'special' argument, if provided
-  is.special.year <- logical( length(rain) )
+  is.special.year <- logical( SIMULATION.PERIOD )
   
   if ( !is.null( special ) )
   {
@@ -1009,7 +996,7 @@ tmRun <- function (Spp,
       if ( special[i, specialColCohortID] < 1 | special[i, specialColCohortID] > nrow(Cohorts) )
         stop( paste("cohort.id", special[i, specialColCohortID], "out of range in special argument") )
       
-      if ( special[i, specialColYear] < 1 | special[i, specialColYear] > length(rain) )
+      if ( special[i, specialColYear] < 1 | special[i, specialColYear] > SIMULATION.PERIOD )
         stop( paste("year", special[i, specialColYear], "out of range in special argument") )
       
       if ( is.na( pmatch(special[i, specialColAction], special.actions) ) )
@@ -1030,7 +1017,7 @@ tmRun <- function (Spp,
   #==============================================================
   for ( YEAR in 1:length( rain ) )
   {
-    if ( YEAR %% session.settings$display.time.interval == 0 | YEAR == length(rain) ) {
+    if ( YEAR %% session.settings$display.time.interval == 0 | YEAR == SIMULATION.PERIOD ) {
       cat( "Year ", YEAR, "\n" )
       flush.console()
     }
@@ -1048,40 +1035,50 @@ tmRun <- function (Spp,
         if ( Cohorts[irow, colN] > 0 )
         {
           i.action <- pmatch( special[i, specialColAction], special.actions )
+
           if ( i.action == special.action.remove ) 
           {
             Cohorts[irow, colN] <- 0
           }
+          
+          else if ( i.action == special.action.protect )
+          {
+            Cohorts[irow, colProtect] <- (special[i, specialColValue] != 0)
+          } 
+          
           else if ( i.action == special.action.cut )
           {
             cut.h <- min( Cohorts[irow, colHeight], special[i, specialColValue] )
-            pars <- Spp[[ Cohorts[irow, colSpID] ]]
-            if ( is.euc[Cohorts[irow, colSpID]] & cut.h <= pars@height_yr1 )
+
+            # If the species can coppice, record current height to use
+            # for boosted growth
+            spID <- Cohorts[irow, colSpID]
+            pars <- Spp[[ spID ]]
+            if ( pars@canCoppice && cut.h <= pars@height_yr1 )
             {
               Cohorts[irow, colCoppiceStage] <- Cohorts[irow, colCoppiceStage] + 1
               Cohorts[irow, colCoppiceOn] <- 1
               
-              # when a cohort coppices again before reaching the original former height, former height stays                               
-              # as the original former height, otherwise it is changed to the immediate previous height:
-              if (Cohorts[irow, colCoppiceStage] > 1 & Cohorts[irow, colHeight] < Cohorts[irow, colFormerHt] ) 
+              # when a cohort coppices again before reaching the original former 
+              # height, former height stays as the original former height, otherwise
+              # it is changed to the immediate previous height:
+              if ( Cohorts[irow, colCoppiceStage] > 1 && 
+                   Cohorts[irow, colHeight] < Cohorts[irow, colFormerHt] ) 
               {
                 Cohorts[irow, colFormerHt] <- Cohorts[irow, colFormerHt]
               } else {
                 Cohorts[irow, colFormerHt] <- Cohorts[irow, colHeight]
               }
             }
+            
             Cohorts[irow, colHeight] <- cut.h
-            print( paste( "cut cohort ", cohort.id, "in year ", YEAR, "to height", cut.h ) )
+            cat( "cut cohort", cohort.id, "in year", YEAR, "to height", cut.h, "\n" )
           }          
-          else if ( i.action == special.action.protect )
-          {
-            Cohorts[irow, colProtect] <- (special[i, specialColValue] != 0)
-          } 
         }
         else
         {
-          print( paste( "cohort", special[i, specialColCohortID], "died before special action in year", YEAR ) )
-          flush.console()
+          cat( "cohort", special[i, specialColCohortID], 
+               "died before special action in year", YEAR, "\n" )
         }
       }
     }
@@ -1169,9 +1166,10 @@ tmRun <- function (Spp,
       adj.pars <- pars@growth_crowding_pars
       g.crowd.adj <- 1 / {1 + exp( -{adj.pars[1] + adj.pars[2] * total.resource.use * h^adj.pars[3]} ) }
       
-      # Now, if you are coppicing and you're still <70% of former(max) ht, your growth rate is 
-      # boosted, whereas if you have reached or exceeded 70% of former height your growth rate is normal and
-      # coppicing is turned/stays off (colCoppiceOn=0); and if you're not coppicing, your growth rate is normal:
+      # Now, if you are coppicing and you're less than COPPICE_BOOST_PROP of former(max) ht,
+      # our growth rate is boosted, whereas if you have reached or exceeded that proportion of
+      # former height your growth rate is normal and coppicing is turned/stays off 
+      # (colCoppiceOn=0). If you're not coppicing, your growth rate is normal:
       
       if ( pars@canCoppice && Cohorts[i, colCoppiceOn] == 1 )  
       {
@@ -1179,9 +1177,9 @@ tmRun <- function (Spp,
         if (is.na(former.h))
           stop("Coppicing turned on but former height (former.h) is NA")
         
-        if ( h < 0.7 * former.h ) 
-          # to introduce a slackening off of the boosting effect due to root area equilibrating with shoot area 
-          #which we estimated might happen at 70% of former ht (see coppice spreadsheet)
+        if ( h < COPPICE_BOOST_PROP * former.h ) 
+          # To introduce a slackening off of the boosting effect due to root area 
+          # equilibrating with shoot area (based on Karen's unpubl. data)
         { 
           boost.pars <- pars@coppice_boost_pars
           adjusted.boosted.gr <- max( pars@growth_rate, boost.pars[1]/{1 + boost.pars[2] * exp(-boost.pars[3] * former.h)} )
@@ -1189,7 +1187,7 @@ tmRun <- function (Spp,
           # coppice growth data from Mt Pilot, and directly relate a boosted growth rate to a tree's former height.
           Cohorts[i, colGrowthRate] <- adjusted.boosted.gr * g.rain.adj * g.crowd.adj
           
-        } else {  # height >= 0.7 * former.h
+        } else {  # height >= COPPICE_BOOST_PROP * former.h
           Cohorts[i, colGrowthRate] <- pars@growth_rate * g.rain.adj * g.crowd.adj
           Cohorts[i, colCoppiceOn] <- 0
         }
@@ -1218,7 +1216,10 @@ tmRun <- function (Spp,
       #print( "Survival" );  flush.console()
       p.base <- pars@survival_prob[ min(length( pars@survival_prob ), Cohorts[i, colAge]) ]
       
-      if ( is.euc[Cohorts[i, colSpID]] & Cohorts[i, colCoppiceOn] == 1  &  h < 0.7 * former.h )  
+      if ( pars@canCoppice && 
+           Cohorts[i, colCoppiceOn] == 1  &&  
+           h < COPPICE_BOOST_PROP * former.h )
+        
         # this is safe as long as former.h is never NA when colCoppiceOn = 1, which should always be true???
       {
         h <- former.h
@@ -1403,9 +1404,9 @@ tmRun <- function (Spp,
         h <- Cohorts[i, colHeight]
         former.h <- Cohorts[i, colFormerHt]
         
-        if ( is.euc[Cohorts[i, colSpID]] &
-               Cohorts[i, colCoppiceOn] == 1  &  
-               h < 0.7 * former.h )  #  this last condition is not necessary but could be a good double-check.
+        if ( pars@canCoppice &&
+             Cohorts[i, colCoppiceOn] == 1 &&
+             h < COPPICE_BOOST_PROP * former.h )  # last condition just a paranoid double-check
           
           # this is safe as long as former.h is never NA when colCoppiceOn = 1, which should always be true???
         {
@@ -1414,13 +1415,7 @@ tmRun <- function (Spp,
         
         # inverse logit expression to calculate probability of survival in fire
         adj.pars <- pars@survival_fire_pars
-        # NB currently we're using different forms for Euc and Callitris...this might change when we reassess Euc fire survival:
-        if (is.euc[Cohorts[i, colSpID]]) {
-          fire.surv <- 1 / (1 + exp( -( adj.pars[1] + adj.pars[2] * realised.fire.intensity * h^adj.pars[3] ) ) ) 
-        } else {
-          # For Callitris we use a generalized logistic with ht raised to a power
-          fire.surv <- ( 1 / ( 1 + exp(-( adj.pars[1] + adj.pars[2] * realised.fire.intensity + adj.pars[3] * h ^ adj.pars[4] ) ) ) ^ adj.pars[5] )
-        }  
+        fire.surv <- ( 1 / ( 1 + exp(-( adj.pars[1] + adj.pars[2] * realised.fire.intensity + adj.pars[3] * h ^ adj.pars[4] ) ) ) ^ adj.pars[5] )
         
         #print( paste(pars$name, "fire survival", fire.surv) ); flush.console()
         
@@ -1431,7 +1426,8 @@ tmRun <- function (Spp,
         Cohorts[i, colSurvP] <- Cohorts[i, colSurvP] * fire.surv  # NB this won't be exactly the same as the rbinom result above.
         
         if ( Cohorts[i, colN] > 0 ) {
-          # height adjustment for survivors; although this is not specific to eucs, at present callitris height_fire_pars are null (Inf, 0, 0, 0)
+          # height adjustment for survivors; although this is not specific to eucs, at present callitris 
+          # height_fire_pars are null (Inf, 0, 0, 0)
           adj.pars <- pars@height_fire_pars
           h <- Cohorts[i, colHeight]
           # fire.height.adj <- 1 / (1 + exp( -( adj.pars[1] + adj.pars[2] * realised.fire.intensity  * h^adj.pars[3] ) ) )
@@ -1445,22 +1441,30 @@ tmRun <- function (Spp,
           # resprout.propn pars give really tiny new.hts which do not grow! (like 1x10^-92)!!!
           # (note: this height change can affect protected cohorts)
           
-          if (is.euc[Cohorts[i, colSpID]]) {
-            # We boost all surviving Eucs which are <70% of their former (max) ht, not just truly
-            # coppiced ones: so throughout tmRun, colCoppiceOn and colCoppiceStage now actually
-            # mean any eucs with fire height reductions.  
+          if ( pars@canCoppice ) {
+            # We boost all surviving coppicing trees which are below the boost threshold of their former
+            # (max) height, not just the currently coppiced ones (ie. colCoppiceOn and colCoppiceStage now
+            # actually mean any trees of a coppicing species with fire height reductions).  
+            #
+            # Karen's note:
             # ???I SHOULD DO THE SAME FOR CUT-'N-COPPICED TREES - THINK ABOUT AND DO THIS LATER WHEN HAVE TIME??
-            Cohorts[i, colCoppiceStage] <- Cohorts[i, colCoppiceStage] + 1  # this will tell us how many fires a cohort has survived through its 'lifetime'.
+
+            # this will tell us how many fires a cohort has survived through its lifetime
+            Cohorts[i, colCoppiceStage] <- Cohorts[i, colCoppiceStage] + 1
+            
             Cohorts[i, colCoppiceOn] <- 1
             
+            # Karen's note:
             #  Cohorts[i, colFormerHt] <- max( Cohorts[i, colFormerHt], Cohorts[i, colHeight], na.rm=TRUE ) 
             # We thought we could simplify it to the above 'max' test, but we can't because the test has to be on 70% of
             # former ht, and then we'd have to store 70% of former ht, which gets messy for the "cut-'n-coppice" stuff we do 
             # earlier in the tm script, so I have stayed with the current 'if else' test as follows:
             
-            # When a cohort is fire affected again before reaching 70% of the original former height, former height stays 
-            # as the original former height, otherwise it is changed to the immediate previous height:
-            if (Cohorts[i, colCoppiceStage] > 1 & Cohorts[i, colHeight] < 0.7 * Cohorts[i, colFormerHt] ) {
+            # When a cohort is fire affected again before reaching the boosting threshold of the original 
+            # former height, former height remains as the original former height, otherwise it is changed 
+            # to the immediate previous height:
+            if ( Cohorts[i, colCoppiceStage] > 1 && 
+                 Cohorts[i, colHeight] < COPPICE_BOOST_PROP * Cohorts[i, colFormerHt] ) {
               Cohorts[i, colFormerHt] <- Cohorts[i, colFormerHt]
             } else {
               Cohorts[i, colFormerHt] <- Cohorts[i, colHeight]
@@ -1469,10 +1473,10 @@ tmRun <- function (Spp,
             # Only now this is all done, can we update the cohorts table with the post-fire adjusted height:
             Cohorts[i, colHeight] <- new.h
             
-          }    # close EUC loop
-        }   # close NON-ZERO COHORT loop
-      }  # close COHORT loop
-    }     # close FIRE loop 
+          } # close canCoppice loop
+        } # close NON-ZERO COHORT loop
+      } # close COHORT loop
+    } # close FIRE loop 
     
     
     #==============================================================
@@ -1500,7 +1504,7 @@ tmRun <- function (Spp,
     # Check for loss of all cohorts and break out early if we are not using
     # external seed input
     if (nrow(Cohorts) == 0 && !EXTERNAL.SEED) {
-      if (YEAR < length(rain)) {
+      if (YEAR < SIMULATION.PERIOD) {
         print(paste("All cohorts extinct at year", YEAR))
         break
       }

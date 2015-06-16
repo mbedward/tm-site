@@ -35,8 +35,9 @@
 #' 
 #' \code{combined.resource.use} is the summed resource use for all extant cohorts.
 #' 
-#' Trees which have been coppiced have a boosted growth rate which is meant to represent
-#' their more extensive root system compared to un-coppiced trees of the same height.
+#' For species where this is applicable, trees which have been coppiced have a
+#' boosted growth rate which is meant to represent their more extensive root
+#' system compared to un-coppiced trees of the same height.
 #' \preformatted{g.boosted = max( g, b1 / (1 + b2 * exp(-b3 * hprev)) )}
 #' 
 #' 
@@ -384,7 +385,7 @@ setGeneric("isComplete", function(object) standardGeneric("isComplete"))
 setMethod("isComplete", 
           signature="SpeciesParams",
           definition = function(object) {              
-              
+            
             fns <- list(
               .check_tree_desc,
               .check_max_height,
@@ -405,11 +406,32 @@ setMethod("isComplete",
               .check_survival_crowding_pars,
               .check_survival_fire_pars,
               .check_non_flammability)
-              
+            
             # run all check_XXX functions and return accumulated error 
             # messages, if any
             unlist( lapply(fns, do.call, list(object)) )
           })
+
+
+#' Check if each \code{SpeciesParams} object in a list is ready for use.
+#' 
+#' Checks that all required elements of the given \code{SpeciesParams} object
+#' have valid values.
+#' 
+#' @param object a list of \code{SpeciesParams} objects to check
+#' 
+#' @return a character vector of error messages for invalid or incomplete
+#'   elements; otherwise an empty vector if all elements are valid
+#' 
+#' @export
+#' 
+setMethod("isComplete", 
+          signature="list",
+          definition = function(object) {
+            
+            lapply(object, isComplete)
+          })
+
 
 
 setGeneric("hasFunction", function(object, fnName) standardGeneric("hasFunction"))
