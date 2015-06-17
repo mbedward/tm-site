@@ -75,12 +75,16 @@
 #'   compatible with those used for species dimensions.
 #'   
 #' @param scheduled.fires Numeric vector of fire intensity values. The scale is 
-#'   user-defined. If provided, the \code{fire.func} argument must also be
+#'   user-defined. If provided, the \code{fire.intensity.func} argument must also be
 #'   present.
 #'   
-#' @param fire.func Function taking two numeric arguments (flammable stand 
+#' @param fire.intensity.func Function taking two numeric arguments (flammable stand 
 #'   proportion and incoming fire intensity) and returning a single numeric
 #'   value for realized fire intensity
+#'   
+#' @param fire.patchiness.func Function taking a single argument (incoming fire intensity)
+#'   and returning a single numeric value for the probability of an individual tree being 
+#'   burnt.
 #'   
 #' @param fire.canopy.func Function taking a single numeric argument for
 #'   summed core canopy area, and returning a (possibly) transformed area value.
@@ -158,7 +162,8 @@ tmRun <- function (Spp,
                    rain, 
                    stand.area=10000,
                    scheduled.fires=NULL, 
-                   fire.func=NULL, 
+                   fire.intensity.func=NULL, 
+                   fire.patchiness.func=NULL,
                    fire.canopy.func=NULL, 
                    fire.early.prob=0,
                    overlap.matrix=0, 
@@ -190,16 +195,21 @@ tmRun <- function (Spp,
 
   
   # ====================================================================================
-  #  Get the names of objects passed as args. Any arguments that are expressions are
+  #  Get the names of objects passed as args. Any arguments which are expressions are
   #  evaluated at this stage.
   # ====================================================================================
   
   ARG.INFO <- data.frame(
-    arg.name = c("initial.cohorts", "rain", "scheduled.fires", "fire.func", "fire.canopy.func", "fire.early.prob",
+    arg.name = c("initial.cohorts", "rain", "stand.area",
+                 "scheduled.fires", "fire.intensity.func", "fire.patchiness.func",
+                 "fire.canopy.func", "fire.early.prob",
                  "thinning", "special", "seedling.survival", "overlap.matrix"),
     is.expr = FALSE,
     obj.name = "",
-    row.names = c("init", "rain", "fire", "fireFunc", "fireCanopyFunc", "fireEarlyProb", "thinning", "special", "seedSurv", "overlap"),
+    row.names = c("init", "rain", "standArea",
+                  "fire", "fireIntFunc", "firePatchFunc", 
+                  "fireCanopyFunc", "fireEarlyProb", 
+                  "thinning", "special", "seedSurv", "overlap"),
     stringsAsFactors = FALSE)
   
   for (i in 1:nrow(ARG.INFO)) {
@@ -267,8 +277,16 @@ tmRun <- function (Spp,
   NON.FLAMMABILITY <- numeric(NUM.SPP)
   for ( spID in 1:NUM.SPP ) NON.FLAMMABILITY[ spID ] <- Spp[[spID]]@non_flammability
   
-  if (is.null(fire.func)) {
-    fire.func <- function(flam.prop, intensity) { intensity }
+  if (is.null(fire.intensity.func)) {
+    # Default function returns the incoming fire intensity
+    # regardless of stand state
+    fire.intensity.func <- function(flam.prop, intensity) { intensity }
+  }
+  
+  if (is.null(fire.patchiness.func)) {
+    # Default function returns proportion burnt of 1 for any
+    # fire
+    fire.patchiness.func <- function(intensity) { 1.0 }
   }
   
   if (is.null(fire.canopy.func)) {
@@ -413,7 +431,8 @@ tmRun <- function (Spp,
                      "MergedArea REAL,",
                      "Rain REAL,", 
                      "ScheduledFires REAL,", 
-                     "RealisedFires REAL,", 
+                     "RealizedFires REAL,", 
+                     "RealizedPropBurnt REAL,",
                      "FlammableProp REAL,", 
                      "SeedlingSurvival REAL,",
                      "PRIMARY KEY (RunID, Time) )"))
@@ -569,9 +588,21 @@ tmRun <- function (Spp,
   #  paramobjects database table
   # ====================================================================================
   StoreParamSnapshot <- function(dbcon, paramSetID) {
-    params <- list(SpeciesParams=Spp, initial.cohorts=initial.cohorts, rain=rain, fire=scheduled.fires, 
-                   fire.func=fire.func, thinning=thinning, special=special, seedling.survival=seedling.survival, 
-                   overlap.matrix=overlap.matrix, ov.gen=ov.gen, recruitment=recruitment) 
+    params <- list(Spp = Spp, 
+                   initial.cohorts = initial.cohorts, 
+                   rain = rain, 
+                   stand.area = stand.area,
+                   scheduled.fires = scheduled.fires, 
+                   fire.intensity.func = fire.intensity.func, 
+                   fire.patchiness.func = fire.patchiness.func,
+                   fire.canopy.func = fire.canopy.func,
+                   fire.early.prob = fire.early.prob,
+                   overlap.matrix = overlap.matrix, 
+                   ov.gen = ov.gen,
+                   recruitment = recruitment,
+                   thinning = thinning, 
+                   special = special, 
+                   seedling.survival = seedling.survival ) 
     
     object.data <- rawToChar(serialize(params, NULL, ascii=TRUE))
     
@@ -718,7 +749,8 @@ tmRun <- function (Spp,
                          common.merged.area[1:YEAR],
                          rain[1:YEAR], 
                          scheduled.fires[1:YEAR], 
-                         realised.fires[1:YEAR], 
+                         realized.fires[1:YEAR], 
+                         realized.prop.burnt[1:YEAR],
                          flammable.proportions[1:YEAR], 
                          seedling.survival[1:YEAR])
     
@@ -836,7 +868,8 @@ tmRun <- function (Spp,
   names.combined <- paste("CombCoreArea", SP.NAMES, sep="")
   names(total.core.area) <- c( names.combined, "CombCoreAreaGeneral")
   
-  realised.fires <- numeric( SIMULATION.PERIOD )
+  realized.fires <- numeric( SIMULATION.PERIOD )
+  realized.prop.burnt <- numeric( SIMULATION.PERIOD )
   flammable.proportions <- numeric( SIMULATION.PERIOD )
   
   # Connect to the output database. This will be either a user-supplied database or a 
@@ -863,10 +896,6 @@ tmRun <- function (Spp,
   }
   else
   {
-    # if a fire vector was provided then a fire function must be too
-    if ( is.null( fire.func ) ) 
-      stop( "scheduled.fires argument was provided but fire.func is missing" )    
-    
     if ( length(scheduled.fires) < SIMULATION.PERIOD ) 
       scheduled.fires <- c(scheduled.fires, rep(0, SIMULATION.PERIOD - length(scheduled.fires)))
   }
@@ -1328,28 +1357,12 @@ tmRun <- function (Spp,
     #==============================================================
     if ( scheduled.fires[YEAR] > 0 )  # if a fire is SCHEDULED in the current year
     {
-      # first we calculate a realised fire intensity using the relationships contained in the fire.function
+      # first we calculate a realized fire intensity using the relationships contained in the fire.function
       # (which has as input scheduled intensity and the flammable proportion of the cell). Flammable proportion
       # of the cell is calculated as the difference between the cell area and the contribution of each cohort to
       # what we think of as non-flammable area. (Note that we are re-calculating core area for each cohort here 
       # but we don't use these new values for reporting)
       #
-      # The current fire.func looks like this:
-      #
-      # function ( flammable.prop, scheduled.fire.intensity )  **CHANGE REGNS AND THIS DESCRIPTION WHEN FINALISED**
-      # {
-      # A function that returns the realised.fire.intensity in a particular year. The function was derived on the basis 
-      # of actual data (Janet Cohn's data for incoming and outgoing intensity (represented by eucalypt char heights) and 
-      # Basal Areas, and my calculations of flammable proportions in her quadrats), and on a combination of models fitted 
-      # to this data. This calculation of flammable prop was done in the same way as the model calculates it (ie. takes 
-      # account of when the total.core.area exceeds the cell area).
-      #
-      # if ( scheduled.fire.intensity > Threshold ) 
-      #  { return( scheduled.fire.intensity  ) } # realised.fire.int above threshold is same as scheduled
-      # else if (scheduled.fire.intensity <= Threshold ) 
-      #  { return( scheduled.fire.intensity + b1 * (1 - flammable.prop ) ) } # dampen realised.fire.int below threshold
-      # }
-      # and we are using Threshols = 4.5 and b1 = -1.4 
       
       flammable.area <- stand.area
       if (nrow(Cohorts) > 0) {
@@ -1372,21 +1385,26 @@ tmRun <- function (Spp,
       # flammable.area > 0), then continue with the fire part of the model ? because this was an unnecessary extra 
       # step (the influence of zero flammable area is now dealt with in the fire.function); (2) I have also turned off 
       # the step that tests fire.prob against a runif(1) because the fire.func no longer generates a probability, but
-      # a realised fire intensity instead (and this fire in the site model is a flaming front that has already 
+      # a realized fire intensity instead (and this fire in the site model is a flaming front that has already 
       # arrived at the stand boundary; it is not a new ignition or spotting ahead of the fire. When we have a 
       # landscape model, it will be appropriate to bring back this test of fire.prob against runif(1) to 
       # determine whether an ignition actually takes off into a fire.
       
       flammable.prop <- flammable.area / stand.area
-      realised.fire.intensity <- fire.func( flammable.prop, scheduled.fires[YEAR] )
-      realised.fires[YEAR] <- realised.fire.intensity
+      
+      realized.intensity <- fire.intensity.func( flammable.prop, scheduled.fires[YEAR] )
+      realized.fires[YEAR] <- realized.intensity
+
+      prop.burnt <- fire.patchiness.func( realized.intensity )
+      realized.prop.burnt[YEAR] <- prop.burnt
+      
       flammable.proportions[YEAR] <- flammable.prop
       
       if (session.settings$display.fire.data) {
         print( paste( "total.core.area.post.growth: ", total.core.area.post.growth ) ) 
         print( paste( "flammable.area: ",flammable.area ) )
         print( paste("flam prop:", flammable.prop ) )
-        print( paste("realised.fire.intensity of: ",realised.fires[YEAR], " in year ",YEAR ) )
+        print( paste("realized intensity of: ",realized.intensity, " in year ",YEAR ) )
         flush.console()
       }
       
@@ -1413,26 +1431,37 @@ tmRun <- function (Spp,
           h <- former.h
         }
         
-        # inverse logit expression to calculate probability of survival in fire
+        # Inverse logit expression to calculate probability of survival in fire
+        #
         adj.pars <- pars@survival_fire_pars
-        fire.surv <- ( 1 / ( 1 + exp(-( adj.pars[1] + adj.pars[2] * realised.fire.intensity + adj.pars[3] * h ^ adj.pars[4] ) ) ) ^ adj.pars[5] )
+        p.fire.surv <- ( 1 / ( 1 + exp(-( adj.pars[1] + adj.pars[2] * realized.intensity + adj.pars[3] * h ^ adj.pars[4] ) ) ) ^ adj.pars[5] )
         
-        #print( paste(pars$name, "fire survival", fire.surv) ); flush.console()
+        # The overall probability of survival takes into account fire patchiness.
+        # It is given by the sum of the probability of escaping the fire plus the
+        # probability of being burnt but surviving.
+        #
+        p.overall.fire.surv <- (1 - prop.burnt) + (prop.burnt * p.fire.surv)
         
-        # only apply the survival prob to non-protected cohorts
-        if ( !Cohorts[i, colProtect] ) Cohorts[i, colN] <- rbinom( 1, Cohorts[i, colN], fire.surv )
+        # We only subject non-protected cohorts to the fire.
+        #
+        if ( !Cohorts[i, colProtect] ) {
+          Cohorts[i, colN] <- rbinom( 1, Cohorts[i, colN], p.overall.fire.surv )
+        }
         
-        # adjust the annual survival to reflect the impact of any fire during the timestep
-        Cohorts[i, colSurvP] <- Cohorts[i, colSurvP] * fire.surv  # NB this won't be exactly the same as the rbinom result above.
+        # For reporting, adjust the annual survival rate to reflect the impact of any 
+        # fire during this timestep. Note, this won't be exactly the same as the above
+        # rbinom result.
+        #
+        Cohorts[i, colSurvP] <- Cohorts[i, colSurvP] * p.overall.fire.surv
         
         if ( Cohorts[i, colN] > 0 ) {
           # height adjustment for survivors; although this is not specific to eucs, at present callitris 
           # height_fire_pars are null (Inf, 0, 0, 0)
           adj.pars <- pars@height_fire_pars
           h <- Cohorts[i, colHeight]
-          # fire.height.adj <- 1 / (1 + exp( -( adj.pars[1] + adj.pars[2] * realised.fire.intensity  * h^adj.pars[3] ) ) )
+          # fire.height.adj <- 1 / (1 + exp( -( adj.pars[1] + adj.pars[2] * realized.intensity  * h^adj.pars[3] ) ) )
           # THIS IS THE FINAL GENERALIZED LOGISTIC FUNCTION MICHAEL FITTED IN JULY 2010:
-          fire.height.adj <-  ( 1 / ( 1 + exp( -( adj.pars[1] + adj.pars[2] * realised.fire.intensity + adj.pars[3] * h ) ) ) ^ adj.pars[4] )
+          fire.height.adj <-  ( 1 / ( 1 + exp( -( adj.pars[1] + adj.pars[2] * realized.intensity + adj.pars[3] * h ) ) ) ^ adj.pars[4] )
           
           #print( paste(pars$name, "fire height adj", fire.height.adj) ); flush.console()
           

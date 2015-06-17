@@ -17,45 +17,54 @@ $$
 x_t = logit^{-1}( \alpha + \beta_0 * radius_t + \beta_1 * {height_t}^{\beta_2} )^{\beta_3}
 $$
 
+## Fire
 
-## Vignette Info
+### Fire patchiness
 
-Note the various macros within the `vignette` setion of the metadata block above. These are required in order to instruct R how to build the vignette. Note that you should change the `title` field and the `\VignetteIndexEntry` to match the title of your vignette.
+By default, each fire in the simulation burns all trees in all cohorts, regardless of the realized fire intensity. In reality, low intensity fires are more likely to be patchy, leaving some trees unburnt. Fire patchiness can be included in the simulation by providing a user-defined function which maps values of realized fire intensity to the proportion of trees to burn. The function is passed to the simulation via the `fire.patchiness.func` argument. 
 
-## Styles
+As an example, this function maps intensity values to proportion burnt using a Burr type XII cumulative distribution function (`pburr` and related functions for the Burr distribution are included in the woodland package):
 
-The `html_vignette` template includes a basic CSS theme. To override this theme you can specify your own CSS in the document metadata as follows:
-
-    output: 
-      rmarkdown::html_vignette:
-        css: mystyles.css
-
-## Figures
-
-The figure sizes have been customised so that you can easily put two images side-by-side. 
-
-```{r, fig.show='hold'}
-plot(1:10)
-plot(10:1)
+```{r}
+patchiness <- function( fire.intensity ) {
+  # using a Burr XII distribution to map non-zero intensity to 
+  # proporition burnt
+  p <- woodland::pburr(fire.intensity, c=2, k=1, scale=1.5)
+  
+  # zero intensity values map to zero proportion
+  p[ fire.intensity == 0 ] <- 0
+  
+  p
+}
 ```
 
-You can enable figure captions by `fig_caption: yes` in YAML:
+```{r, echo=FALSE, fig.width=5}
+library(ggplot2)
 
-    output:
-      rmarkdown::html_vignette:
-        fig_caption: yes
+x <- seq(0, 10, 0.1)
+dat <- data.frame(intensity = x, prop = patchiness(x))
 
-Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
+ggplot(dat, aes(intensity, prop)) + 
+  geom_line() +
+  theme_bw() +
+  labs(x="fire intensity", y="proportion burnt")
 
-## More Examples
 
-You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
-
-```{r, echo=FALSE, results='asis'}
-knitr::kable(head(mtcars, 10))
 ```
 
-Also a quote using `>`:
 
-> "He who gives up [code] safety for [code] speed deserves neither."
-([via](https://twitter.com/hadleywickham/status/504368538874703872))
+Once the proportion of the stand which will be burnt $p_{burn}$ has been derived from the fire intensity, the overall probability of an individual tree surviving a fire $p_{survival}$ is given by the probability that it escapes fire $(1 - p_{burn})$ plus the probability that it is burnt but survives $p_{burn} \times p_{fire.survival}$.
+
+$$ 
+\begin{aligned}
+p_{survival} & = 1 - p_{burn} + p_{burn}p_{fire.survival} \\
+             & = 1 - p_{burn}(1 + p_{fire.survival})
+\end{aligned}
+$$
+
+For a cohort of $N_{initial}$ trees, a random number of trees surviving a fire, either by escaping fire or being burnt but surviving, can then be drawn from a Binomial distribution:
+
+$$
+N_{surviving} \sim Binomial(N_{initial}, p_{survival}) 
+$$
+

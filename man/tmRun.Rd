@@ -5,7 +5,8 @@
 \title{Simulates dynamics of a woodland stand.}
 \usage{
 tmRun(Spp, initial.cohorts, rain, stand.area = 10000,
-  scheduled.fires = NULL, fire.func = NULL, fire.canopy.func = NULL,
+  scheduled.fires = NULL, fire.intensity.func = NULL,
+  fire.patchiness.func = NULL, fire.canopy.func = NULL,
   fire.early.prob = 0, overlap.matrix = 0, ov.gen = 0,
   recruitment = TRUE, thinning = NULL, special = NULL,
   seedling.survival = NULL, session.settings = NULL, database = NULL)
@@ -27,12 +28,16 @@ tmRun(Spp, initial.cohorts, rain, stand.area = 10000,
   compatible with those used for species dimensions.}
 
 \item{scheduled.fires}{Numeric vector of fire intensity values. The scale is
-  user-defined. If provided, the \code{fire.func} argument must also be
+  user-defined. If provided, the \code{fire.intensity.func} argument must also be
   present.}
 
-\item{fire.func}{Function taking two numeric arguments (flammable stand
+\item{fire.intensity.func}{Function taking two numeric arguments (flammable stand
   proportion and incoming fire intensity) and returning a single numeric
   value for realized fire intensity}
+
+\item{fire.patchiness.func}{Function taking a single argument (incoming fire intensity)
+  and returning a single numeric value for the probability of an individual tree being
+  burnt.}
 
 \item{fire.canopy.func}{Function taking a single numeric argument for
   summed core canopy area, and returning a (possibly) transformed area value.

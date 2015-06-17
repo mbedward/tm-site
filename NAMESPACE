@@ -2,8 +2,12 @@
 
 export(SpeciesParams)
 export(convertParamList)
+export(dburr)
 export(expasym)
 export(expasym3d)
+export(pburr)
+export(rburr)
+export(realizedFireIntensity)
 export(tmRun)
 export(tmdbClose)
 export(tmdbGetExtant)

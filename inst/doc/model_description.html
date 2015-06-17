@@ -10,7 +10,7 @@
 
 <meta name="author" content="Michael Bedward, Karen Ross" />
 
-<meta name="date" content="2015-04-24" />
+<meta name="date" content="2015-06-17" />
 
 <title>Model description</title>
 
@@ -54,7 +54,7 @@ code > span.er { color: #ff0000; font-weight: bold; }
 <div id="header">
 <h1 class="title">Model description</h1>
 <h4 class="author"><em>Michael Bedward, Karen Ross</em></h4>
-<h4 class="date"><em>2015-04-24</em></h4>
+<h4 class="date"><em>2015-06-17</em></h4>
 </div>
 
 
@@ -63,202 +63,35 @@ code > span.er { color: #ff0000; font-weight: bold; }
 <p><span class="math">\[
 x_t = logit^{-1}( \alpha + \beta_0 * radius_t + \beta_1 * {height_t}^{\beta_2} )^{\beta_3}
 \]</span></p>
-<div id="vignette-info" class="section level2">
-<h2>Vignette Info</h2>
-<p>Note the various macros within the <code>vignette</code> setion of the metadata block above. These are required in order to instruct R how to build the vignette. Note that you should change the <code>title</code> field and the <code>\VignetteIndexEntry</code> to match the title of your vignette.</p>
+<div id="fire" class="section level2">
+<h2>Fire</h2>
+<div id="fire-patchiness" class="section level3">
+<h3>Fire patchiness</h3>
+<p>By default, each fire in the simulation burns all trees in all cohorts, regardless of the realized fire intensity. In reality, low intensity fires are more likely to be patchy, leaving some trees unburnt. Fire patchiness can be included in the simulation by providing a user-defined function which maps values of realized fire intensity to the proportion of trees to burn. The function is passed to the simulation via the <code>fire.patchiness.func</code> argument.</p>
+<p>As an example, this function maps intensity values to proportion burnt using a Burr type XII cumulative distribution function (<code>pburr</code> and related functions for the Burr distribution are included in the woodland package):</p>
+<pre class="sourceCode r"><code class="sourceCode r">patchiness &lt;-<span class="st"> </span>function( fire.intensity ) {
+  <span class="co"># using a Burr XII distribution to map non-zero intensity to </span>
+  <span class="co"># proporition burnt</span>
+  p &lt;-<span class="st"> </span>woodland::<span class="kw">pburr</span>(fire.intensity, <span class="dt">c=</span><span class="dv">2</span>, <span class="dt">k=</span><span class="dv">1</span>, <span class="dt">scale=</span><span class="fl">1.5</span>)
+  
+  <span class="co"># zero intensity values map to zero proportion</span>
+  p[ fire.intensity ==<span class="st"> </span><span class="dv">0</span> ] &lt;-<span class="st"> </span><span class="dv">0</span>
+  
+  p
+}</code></pre>
+<p><img src="data:image/png;base64,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" /></p>
+<p>Once the proportion of the stand which will be burnt <span class="math">\(p_{burn}\)</span> has been derived from the fire intensity, the overall probability of an individual tree surviving a fire <span class="math">\(p_{survival}\)</span> is given by the probability that it escapes fire <span class="math">\((1 - p_{burn})\)</span> plus the probability that it is burnt but survives <span class="math">\(p_{burn} \times p_{fire.survival}\)</span>.</p>
+<p><span class="math">\[ 
+\begin{aligned}
+p_{survival} &amp; = 1 - p_{burn} + p_{burn}p_{fire.survival} \\
+             &amp; = 1 - p_{burn}(1 + p_{fire.survival})
+\end{aligned}
+\]</span></p>
+<p>For a cohort of <span class="math">\(N_{initial}\)</span> trees, a random number of trees surviving a fire, either by escaping fire or being burnt but surviving, can then be drawn from a Binomial distribution:</p>
+<p><span class="math">\[
+N_{surviving} \sim Binomial(N_{initial}, p_{survival}) 
+\]</span></p>
 </div>
-<div id="styles" class="section level2">
-<h2>Styles</h2>
-<p>The <code>html_vignette</code> template includes a basic CSS theme. To override this theme you can specify your own CSS in the document metadata as follows:</p>
-<pre><code>output: 
-  rmarkdown::html_vignette:
-    css: mystyles.css</code></pre>
-</div>
-<div id="figures" class="section level2">
-<h2>Figures</h2>
-<p>The figure sizes have been customised so that you can easily put two images side-by-side.</p>
-<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot</span>(<span class="dv">1</span>:<span class="dv">10</span>)
-<span class="kw">plot</span>(<span class="dv">10</span>:<span class="dv">1</span>)</code></pre>
-<p><img src="data:image/png;base64,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" /> <img src="data:image/png;base64,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" /></p>
-<p>You can enable figure captions by <code>fig_caption: yes</code> in YAML:</p>
-<pre><code>output:
-  rmarkdown::html_vignette:
-    fig_caption: yes</code></pre>
-<p>Then you can use the chunk option <code>fig.cap = &quot;Your figure caption.&quot;</code> in <strong>knitr</strong>.</p>
-</div>
-<div id="more-examples" class="section level2">
-<h2>More Examples</h2>
-<p>You can write math expressions, e.g. <span class="math">\(Y = X\beta + \epsilon\)</span>, footnotes<a href="#fn1" class="footnoteRef" id="fnref1"><sup>1</sup></a>, and tables, e.g. using <code>knitr::kable()</code>.</p>
-<table>
-<thead>
-<tr class="header">
-<th align="left"></th>
-<th align="right">mpg</th>
-<th align="right">cyl</th>
-<th align="right">disp</th>
-<th align="right">hp</th>
-<th align="right">drat</th>
-<th align="right">wt</th>
-<th align="right">qsec</th>
-<th align="right">vs</th>
-<th align="right">am</th>
-<th align="right">gear</th>
-<th align="right">carb</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td align="left">Mazda RX4</td>
-<td align="right">21.0</td>
-<td align="right">6</td>
-<td align="right">160.0</td>
-<td align="right">110</td>
-<td align="right">3.90</td>
-<td align="right">2.620</td>
-<td align="right">16.46</td>
-<td align="right">0</td>
-<td align="right">1</td>
-<td align="right">4</td>
-<td align="right">4</td>
-</tr>
-<tr class="even">
-<td align="left">Mazda RX4 Wag</td>
-<td align="right">21.0</td>
-<td align="right">6</td>
-<td align="right">160.0</td>
-<td align="right">110</td>
-<td align="right">3.90</td>
-<td align="right">2.875</td>
-<td align="right">17.02</td>
-<td align="right">0</td>
-<td align="right">1</td>
-<td align="right">4</td>
-<td align="right">4</td>
-</tr>
-<tr class="odd">
-<td align="left">Datsun 710</td>
-<td align="right">22.8</td>
-<td align="right">4</td>
-<td align="right">108.0</td>
-<td align="right">93</td>
-<td align="right">3.85</td>
-<td align="right">2.320</td>
-<td align="right">18.61</td>
-<td align="right">1</td>
-<td align="right">1</td>
-<td align="right">4</td>
-<td align="right">1</td>
-</tr>
-<tr class="even">
-<td align="left">Hornet 4 Drive</td>
-<td align="right">21.4</td>
-<td align="right">6</td>
-<td align="right">258.0</td>
-<td align="right">110</td>
-<td align="right">3.08</td>
-<td align="right">3.215</td>
-<td align="right">19.44</td>
-<td align="right">1</td>
-<td align="right">0</td>
-<td align="right">3</td>
-<td align="right">1</td>
-</tr>
-<tr class="odd">
-<td align="left">Hornet Sportabout</td>
-<td align="right">18.7</td>
-<td align="right">8</td>
-<td align="right">360.0</td>
-<td align="right">175</td>
-<td align="right">3.15</td>
-<td align="right">3.440</td>
-<td align="right">17.02</td>
-<td align="right">0</td>
-<td align="right">0</td>
-<td align="right">3</td>
-<td align="right">2</td>
-</tr>
-<tr class="even">
-<td align="left">Valiant</td>
-<td align="right">18.1</td>
-<td align="right">6</td>
-<td align="right">225.0</td>
-<td align="right">105</td>
-<td align="right">2.76</td>
-<td align="right">3.460</td>
-<td align="right">20.22</td>
-<td align="right">1</td>
-<td align="right">0</td>
-<td align="right">3</td>
-<td align="right">1</td>
-</tr>
-<tr class="odd">
-<td align="left">Duster 360</td>
-<td align="right">14.3</td>
-<td align="right">8</td>
-<td align="right">360.0</td>
-<td align="right">245</td>
-<td align="right">3.21</td>
-<td align="right">3.570</td>
-<td align="right">15.84</td>
-<td align="right">0</td>
-<td align="right">0</td>
-<td align="right">3</td>
-<td align="right">4</td>
-</tr>
-<tr class="even">
-<td align="left">Merc 240D</td>
-<td align="right">24.4</td>
-<td align="right">4</td>
-<td align="right">146.7</td>
-<td align="right">62</td>
-<td align="right">3.69</td>
-<td align="right">3.190</td>
-<td align="right">20.00</td>
-<td align="right">1</td>
-<td align="right">0</td>
-<td align="right">4</td>
-<td align="right">2</td>
-</tr>
-<tr class="odd">
-<td align="left">Merc 230</td>
-<td align="right">22.8</td>
-<td align="right">4</td>
-<td align="right">140.8</td>
-<td align="right">95</td>
-<td align="right">3.92</td>
-<td align="right">3.150</td>
-<td align="right">22.90</td>
-<td align="right">1</td>
-<td align="right">0</td>
-<td align="right">4</td>
-<td align="right">2</td>
-</tr>
-<tr class="even">
-<td align="left">Merc 280</td>
-<td align="right">19.2</td>
-<td align="right">6</td>
-<td align="right">167.6</td>
-<td align="right">123</td>
-<td align="right">3.92</td>
-<td align="right">3.440</td>
-<td align="right">18.30</td>
-<td align="right">1</td>
-<td align="right">0</td>
-<td align="right">4</td>
-<td align="right">4</td>
-</tr>
-</tbody>
-</table>
-<p>Also a quote using <code>&gt;</code>:</p>
-<blockquote>
-<p>“He who gives up [code] safety for [code] speed deserves neither.” (<a href="https://twitter.com/hadleywickham/status/504368538874703872">via</a>)</p>
-</blockquote>
-</div>
-<div class="footnotes">
-<hr />
-<ol>
-<li id="fn1"><p>A footnote here.<a href="#fnref1">↩</a></p></li>
-</ol>
 </div>
 
 
