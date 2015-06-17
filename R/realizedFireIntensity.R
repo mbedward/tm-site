@@ -33,8 +33,13 @@
 realizedFireIntensity <- function ( flammable.prop, incoming.intensity, 
                                     threshold.intensity=4.5, beta=-2.14 ) {
   
-  if ( incoming.intensity > threshold.intensity )
-    incoming.intensity
-  else
-    incoming.intensity + beta * (1 - flammable.prop)
+  if (length(flammable.prop) > 1)
+    warning("Only using first value of flammable.prop")
+  
+  out <- incoming.intensity
+  
+  ii <- incoming.intensity <= threshold.intensity
+  out[ii] <- pmax( 0, incoming.intensity[ii] + beta * (1 - flammable.prop[1]) )
+  
+  out
 }
