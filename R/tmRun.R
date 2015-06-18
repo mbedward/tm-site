@@ -204,12 +204,21 @@ tmRun <- function (Spp,
                  "scheduled.fires", "fire.intensity.func", "fire.patchiness.func",
                  "fire.canopy.func", "fire.early.prob",
                  "thinning", "special", "seedling.survival", "overlap.matrix"),
+    
     is.expr = FALSE,
+
     obj.name = "",
+
+    db.name = c("InitialCohorts", "Rain", "StandArea",
+                "Fire", "FireIntFunc", "FirePatchFunc", 
+                "FireCanopyFunc", "FireEarlyProb",
+                "Thinning", "Special", "SeedSurv", "OverlapMatrix"),
+
     row.names = c("init", "rain", "standArea",
                   "fire", "fireIntFunc", "firePatchFunc", 
                   "fireCanopyFunc", "fireEarlyProb", 
                   "thinning", "special", "seedSurv", "overlap"),
+
     stringsAsFactors = FALSE)
   
   for (i in 1:nrow(ARG.INFO)) {
@@ -317,17 +326,26 @@ tmRun <- function (Spp,
   cscolFinalDBH <- 14; cscolFinalBA <- 15; cscolCoppiceStage <- 16
   
   TOTAL.COHORTS <- 0 # will be updated by NewCohortSummaryRecord
-  
+
+
+  # ====================================================================================
+  #  Helper function - format a multi-line query string
+  # ====================================================================================  
+  FormatSQL <- function(str) {
+    strwrap(str, width = 10000, simplify = TRUE)
+  }
   
   # ====================================================================================
   # SQL INSERT statement for writing cohort data
   # ====================================================================================
   
   SQL.WriteCohortData <-
-    paste("INSERT INTO cohortyearly (",
-          "RunID, Time, CohortID, SpeciesID, Age, Height, DBH, BasalArea, N, ResourceUse, CanopyRadius, CoppiceStage, FormerHeight, CoppiceOn,",
-          "GrowthAdj, SurvivalAdj, CoreAreaGeneral )",
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    FormatSQL(
+      "INSERT INTO cohortyearly ( 
+         RunID, Time, CohortID, SpeciesID, Age, Height, DBH, BasalArea, N, 
+         ResourceUse, CanopyRadius, CoppiceStage, FormerHeight, CoppiceOn,
+         GrowthAdj, SurvivalAdj, CoreAreaGeneral )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" )
   
   
   # ====================================================================================
@@ -379,104 +397,94 @@ tmRun <- function (Spp,
     con <- RSQLite::dbConnect( RSQLite::SQLite(), tempfile() )
     
     # Create cohort annual data table
-    RSQLite::dbGetQuery(con,
-               paste("CREATE TABLE cohortyearly (",
-                     "RunID INTEGER REFERENCES runs(ID),",
-                     "Time INTEGER,",
-                     "CohortID INTEGER,",
-                     "SpeciesID INTEGER,",
-                     "Age INTEGER,",
-                     "Height REAL,",
-                     "N INTEGER,",
-                     "ResourceUse REAL,",
-                     "GrowthAdj REAL,",
-                     "SurvivalAdj REAL,",
-                     "CanopyRadius REAL,",
-                     "CoreAreaGeneral REAL,",
-                     "DBH REAL,",
-                     "BasalArea REAL,",
-                     "CoppiceStage INTEGER,",
-                     "FormerHeight REAL,",
-                     "CoppiceOn INTEGER,", 
-                     "PRIMARY KEY (RunID, Time, CohortID) )"))
+    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE cohortyearly (
+                     RunID INTEGER REFERENCES runs(ID),
+                     Time INTEGER,
+                     CohortID INTEGER,
+                     SpeciesID INTEGER,
+                     Age INTEGER,
+                     Height REAL,
+                     N INTEGER,
+                     ResourceUse REAL,
+                     GrowthAdj REAL,
+                     SurvivalAdj REAL,
+                     CanopyRadius REAL,
+                     CoreAreaGeneral REAL,
+                     DBH REAL,
+                     BasalArea REAL,
+                     CoppiceStage INTEGER,
+                     FormerHeight REAL,
+                     CoppiceOn INTEGER,
+                     PRIMARY KEY (RunID, Time, CohortID) )" ) )
     
     # Create cohort summary table
-    RSQLite::dbGetQuery(con,
-               paste("CREATE TABLE cohortsummary (",
-                     "RunID INTEGER REFERENCES runs(ID),",
-                     "CohortID INTEGER,",
-                     "SpeciesID INTEGER,",
-                     "StartTime INTEGER,",
-                     "StartAge INTEGER,",
-                     "StartN INTEGER,",
-                     "StartHeight REAL,",
-                     "StartDBH REAL,",
-                     "StartBasalArea REAL,",
-                     "FinalTime INTEGER,",
-                     "FinalAge INTEGER,",
-                     "FinalN INTEGER,",
-                     "FinalHeight REAL,",
-                     "FinalDBH REAL,",
-                     "FinalBasalArea,",
-                     "CoppiceStage INTEGER,", 
-                     "PRIMARY KEY (RunID, CohortID) )"))
+    RSQLite::dbGetQuery(con, FormatSQL( "CREATE TABLE cohortsummary (
+                     RunID INTEGER REFERENCES runs(ID),
+                     CohortID INTEGER,
+                     SpeciesID INTEGER,
+                     StartTime INTEGER,
+                     StartAge INTEGER,
+                     StartN INTEGER,
+                     StartHeight REAL,
+                     StartDBH REAL,
+                     StartBasalArea REAL,
+                     FinalTime INTEGER,
+                     FinalAge INTEGER,
+                     FinalN INTEGER,
+                     FinalHeight REAL,
+                     FinalDBH REAL,
+                     FinalBasalArea,
+                     CoppiceStage INTEGER, 
+                     PRIMARY KEY (RunID, CohortID) )" ) )
     
     # Create the common data table
-    RSQLite::dbGetQuery(con,
-               paste("CREATE TABLE commondata (",
-                     "RunID INTEGER REFERENCES runs(ID),",
-                     "Time INTEGER,",
-                     "ResourceUse REAL,", 
-                     "CoreAreaGeneral REAL,",
-                     "MergedArea REAL,",
-                     "Rain REAL,", 
-                     "ScheduledFires REAL,", 
-                     "RealizedFires REAL,", 
-                     "RealizedPropBurnt REAL,",
-                     "FlammableProp REAL,", 
-                     "SeedlingSurvival REAL,",
-                     "PRIMARY KEY (RunID, Time) )"))
+    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE commondata (
+                     RunID INTEGER REFERENCES runs(ID),
+                     Time INTEGER,
+                     ResourceUse REAL, 
+                     CoreAreaGeneral REAL,
+                     MergedArea REAL,
+                     Rain REAL, 
+                     ScheduledFires REAL, 
+                     RealizedFires REAL, 
+                     RealizedPropBurnt REAL,
+                     FlammableProp REAL, 
+                     SeedlingSurvival REAL,
+                     PRIMARY KEY (RunID, Time) )" ) )
     
     # Create the run description table
-    RSQLite::dbGetQuery(con,
-               paste("CREATE TABLE runs (",
-                     "ID INTEGER PRIMARY KEY,",
-                     "ParamSetID INTEGER REFERENCES paramsets(ID),",
-                     "Replicate INTEGER,",
-                     "UNIQUE(ParamSetID, Replicate) )"))
+    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE runs (
+                     ID INTEGER PRIMARY KEY,
+                     ParamSetID INTEGER REFERENCES paramsets(ID),
+                     Replicate INTEGER,
+                     UNIQUE(ParamSetID, Replicate) )" ) )
+    
     
     # Create the param sets table
-    RSQLite::dbGetQuery(con, 
-               paste("CREATE TABLE paramsets (",
-                     "ID INTEGER PRIMARY KEY,",
-                     "SpeciesSetID INTEGER REFERENCES species(ID),",
-                     "InitialCohorts TEXT,",
-                     "Rain TEXT,",
-                     "Fire TEXT,",
-                     "FireFunc TEXT,",
-                     "FireCanopyFunc TEXT,",
-                     "FireEarlyProb TEXT,",
-                     "Thinning TEXT,",
-                     "Special TEXT,",
-                     "SeedSurv TEXT,",
-                     "OverlapMatrix TEXT )"))
+    argFields <- paste(ARG.INFO$db.name, "TEXT")
+    argFields <- paste(argFields, collapse=", ")
+    
+    sql <- paste("CREATE TABLE paramsets (ID INTEGER PRIMARY KEY,", 
+                 "SpeciesSetID INTEGER REFERENCES species(ID),",
+                 argFields, ")")
+    
+    RSQLite::dbGetQuery(con, sql)
+    
     
     # Create the species table that lists species IDs and names
-    RSQLite::dbGetQuery(con,
-               paste("CREATE TABLE species (",
-                     "ID INTEGER,",
-                     "SpeciesID INTEGER,",
-                     "Name TEXT,",
-                     "PRIMARY KEY (ID, SpeciesID))"))
+    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE species (
+                     ID INTEGER,
+                     SpeciesID INTEGER,
+                     Name TEXT,
+                     PRIMARY KEY (ID, SpeciesID))" ) )
     
     # Create the paramobjects table that stores a full copy of the parameters.
     # This has a one-to-one relationship with records in the paramsets table and
     # the only reason we use a separate table is to avoid getting loads of binary
     # crap returned when we do queries with "select * from paramsets".
-    RSQLite::dbGetQuery(con,
-               paste("CREATE TABLE paramobjects (",
-                     "ID INTEGER PRIMARY KEY REFERENCES paramsets(ID),",
-                     "Data BLOB )"))
+    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE paramobjects (
+                     ID INTEGER PRIMARY KEY REFERENCES paramsets(ID),
+                     Data BLOB )" ) )
     
     # Return the connection
     con
@@ -518,19 +526,20 @@ tmRun <- function (Spp,
       # get the id of the existing combination 
       spSetID <- matches$ID[ matches$found ]
     }
+
+    sqlLine <- function(rowName) {
+      db.name <- ARG.INFO[ rowName, "db.name" ]
+      paste(" AND", db.name, "=", WrapText(ARG.INFO[rowName, "obj.name"]), sep=" ")
+    }
+
+    lines <- sapply(rownames(ARG.INFO), sqlLine)
+    lines <- paste(lines, collapse=" ")
     
     # search for this parameter combination in the paramsets table
-    sql <- paste("SELECT ID FROM paramsets WHERE SpeciesSetID = ", spSetID,
-                 " AND InitialCohorts = ", WrapText(ARG.INFO["init", "obj.name"]),
-                 " AND Rain = ", WrapText(ARG.INFO["rain", "obj.name"]),
-                 " AND Fire = ", WrapText(ARG.INFO["fire", "obj.name"]),
-                 " AND FireFunc = ", WrapText(ARG.INFO["fireFunc", "obj.name"]),
-                 " AND FireCanopyFunc = ", WrapText(ARG.INFO["fireCanopyFunc", "obj.name"]),
-                 " AND FireEarlyProb = ", WrapText(ARG.INFO["fireEarlyProb", "obj.name"]),
-                 " AND Thinning = ", WrapText(ARG.INFO["thinning", "obj.name"]),
-                 " AND Special = ", WrapText(ARG.INFO["special", "obj.name"]),
-                 " AND SeedSurv = ", WrapText(ARG.INFO["seedSurv", "obj.name"]), 
-                 " AND OverlapMatrix = ", WrapText(ARG.INFO["overlap", "obj.name"]), sep = "")
+    sql <- paste("SELECT ID FROM paramsets WHERE SpeciesSetID = ", 
+                 spSetID,
+                 lines,
+                 sep = "")
     
     df <- RSQLite::dbGetQuery(dbcon, sql)
     
@@ -543,14 +552,16 @@ tmRun <- function (Spp,
         paramSetID <- df[1,1] + 1
       }
       
+      sql <- "INSERT INTO paramsets (ID, SpeciesSetID,"
+      sql <- paste(sql, paste(ARG.INFO$db.name, collapse=", "), ")")
+
+      qmarks <- paste( rep("?", 2 + nrow(ARG.INFO)), collapse=", ")
+      sql <- paste(sql, "VALUES (", qmarks, ")")
+
       # (note the use of as.list(ARG.INFO$obj.name) to ensure that we get
       # arg object names in separate columns)
-      RSQLite::dbGetPreparedQuery(dbcon, 
-                         paste("INSERT INTO paramsets",
-                               "(ID, SpeciesSetID, InitialCohorts, Rain, Fire, FireFunc, FireCanopyFunc, FireEarlyProb,",
-                               "Thinning, Special, SeedSurv, OverlapMatrix)",
-                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
-                         data.frame(paramSetID, spSetID, as.list(ARG.INFO$obj.name)))
+      RSQLite::dbGetPreparedQuery(dbcon, sql,
+        data.frame(paramSetID, spSetID, as.list(ARG.INFO$obj.name)))
       
       StoreParamSnapshot(dbcon, paramSetID)
       
@@ -1454,23 +1465,20 @@ tmRun <- function (Spp,
         #
         Cohorts[i, colSurvP] <- Cohorts[i, colSurvP] * p.overall.fire.surv
         
-        if ( Cohorts[i, colN] > 0 ) {
-          # height adjustment for survivors; although this is not specific to eucs, at present callitris 
-          # height_fire_pars are null (Inf, 0, 0, 0)
-          adj.pars <- pars@height_fire_pars
-          h <- Cohorts[i, colHeight]
-          # fire.height.adj <- 1 / (1 + exp( -( adj.pars[1] + adj.pars[2] * realized.intensity  * h^adj.pars[3] ) ) )
-          # THIS IS THE FINAL GENERALIZED LOGISTIC FUNCTION MICHAEL FITTED IN JULY 2010:
-          fire.height.adj <-  ( 1 / ( 1 + exp( -( adj.pars[1] + adj.pars[2] * realized.intensity + adj.pars[3] * h ) ) ) ^ adj.pars[4] )
-          
-          #print( paste(pars$name, "fire height adj", fire.height.adj) ); flush.console()
-          
-          new.h <- max( (h * fire.height.adj), pars@height_yr1 )
-          # We need to bring all initial coppice heights up to at least height.yr1 because otherwise the current 
-          # resprout.propn pars give really tiny new.hts which do not grow! (like 1x10^-92)!!!
-          # (note: this height change can affect protected cohorts)
-          
+        if ( Cohorts[i, colN] > 0 ) {          
           if ( pars@canCoppice ) {
+            adj.pars <- pars@height_fire_pars
+            h <- Cohorts[i, colHeight]
+
+            # THIS IS THE FINAL GENERALIZED LOGISTIC FUNCTION MICHAEL FITTED IN JULY 2010:
+            fire.height.adj <-  ( 1 / ( 1 + exp( -( adj.pars[1] + adj.pars[2] * realized.intensity + adj.pars[3] * h ) ) ) ^ adj.pars[4] )
+            
+            new.h <- max( (h * fire.height.adj), pars@height_yr1 )
+
+            # We need to bring all initial coppice heights up to at least height.yr1 because otherwise the current 
+            # resprout.propn pars give really tiny new.hts which do not grow! (like 1x10^-92)!!!
+            # (note: this height change can affect protected cohorts)            
+                        
             # We boost all surviving coppicing trees which are below the boost threshold of their former
             # (max) height, not just the currently coppiced ones (ie. colCoppiceOn and colCoppiceStage now
             # actually mean any trees of a coppicing species with fire height reductions).  
