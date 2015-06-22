@@ -6,17 +6,17 @@
 \alias{woodland-package}
 \title{woodland: A package for woodland stand simulation.}
 \description{
-Blah blah blah
+A cohort-level simulation model of woodland tree dynamics.
 }
-\section{Simulation function}{
+\references{
+Karen A. Ross, Ian D. Lunt, Ross A. Bradstock, Michael Bedward, Murray V. Ellis.
+  Did historical tree removal promotewoody plant encroachment in Australian woodlands ?
+  Journal of Vegetation Science 23 (2012) 304-312.
 
-
-Some words about running a simulation with \code{\link{tmRun}}...
-}
-
-\section{Utility functions}{
-
-
-Some words about tmdbOpen and friends used with output SQLite databases.
+Karen A. Ross, Michael Bedward, Murray V. Ellis, Andrew Deane,
+  Christopher C. Simpson, Ross A. Bradstock.
+  Modelling the dynamics of white cypress pine Callitris glaucophylla woodlands
+  in inland south-eastern Australia.
+  Ecological Modelling 211 (2008) 11-24.
 }
 

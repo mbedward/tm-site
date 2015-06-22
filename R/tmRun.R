@@ -52,9 +52,11 @@
 #' The optional \code{session.settings} argument takes a named list which can 
 #' contain the following elements:
 #' \describe{
-#'   \item{display.time.interval}{(integer) specifies the interval, in simulation years,
-#'     for progress reporting to the console during the simulation.}
-#'   \item{display.fire.data}{(logical) if TRUE, enables printing fire data to 
+#'   \item{progress.interval}{(integer; default=0) specifies the interval,
+#'     in simulation years, for write a progress message to the console.
+#'     A value <= 0 means no messages.}
+#'     
+#'   \item{display.fire.data}{(logical; default FALSE) if TRUE, enables printing fire data to 
 #'     the console.}
 #' }
 #' 
@@ -356,10 +358,10 @@ tmRun <- function (Spp,
       session.settings <<- list()
     }
     
-    # the 'display.time.interval' option is a numeric value that sets
+    # the 'progress.interval' option is a numeric value that sets
     # the time between progress reporint on screen
-    if (is.null(session.settings$display.time.interval)) {
-      session.settings$display.time.interval <<- 10
+    if (is.null(session.settings$progress.interval)) {
+      session.settings$progress.interval <<- 0 # no progress messages
     }
     
     # the 'display.fire.data' option enables printing fire data to
@@ -1057,7 +1059,8 @@ tmRun <- function (Spp,
   #==============================================================
   for ( YEAR in 1:length( rain ) )
   {
-    if ( YEAR %% session.settings$display.time.interval == 0 | YEAR == SIMULATION.PERIOD ) {
+    if ( session.settings$progress.interval > 0 && 
+         (YEAR %% session.settings$progress.interval == 0 || YEAR == SIMULATION.PERIOD) ) {
       cat( "Year ", YEAR, "\n" )
       flush.console()
     }
@@ -1377,8 +1380,16 @@ tmRun <- function (Spp,
       
       flammable.area <- stand.area
       if (nrow(Cohorts) > 0) {
-        total.core.area.post.growth <-
-          tapply( apply(Cohorts, 1, function(co) co[colN] * co[colCanopyRadius] * co[colCanopyRadius] * pi ), Cohorts[ , colSpID], sum )
+        # Calculate summed canopy area for each species
+        total.core.area.post.growth <- {
+          
+          canopyAreas <- apply(Cohorts, 1, function(cohort) {
+            r <- cohort[colCanopyRadius]
+            pi * r * r * cohort[colN]
+          })
+        
+          tapply(canopyAreas, Cohorts[ , colSpID], sum)
+        }
         
         # From this point it gets fudgy...
         # We apply the canopy merging function to get total merged canopy area.

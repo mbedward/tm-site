@@ -164,9 +164,11 @@ height reduction.
 The optional \code{session.settings} argument takes a named list which can
 contain the following elements:
 \describe{
-  \item{display.time.interval}{(integer) specifies the interval, in simulation years,
-    for progress reporting to the console during the simulation.}
-  \item{display.fire.data}{(logical) if TRUE, enables printing fire data to
+  \item{progress.interval}{(integer; default=0) specifies the interval,
+    in simulation years, for write a progress message to the console.
+    A value <= 0 means no messages.}
+
+  \item{display.fire.data}{(logical; default FALSE) if TRUE, enables printing fire data to
     the console.}
 }
 }
