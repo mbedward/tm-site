@@ -1,15 +1,11 @@
-#' Generate a summary of the contents of a \code{\link{tmRun}} output database.
+#' Summarize a simulation output database.
+#' 
+#' Queries the output database for the ID value and time length of each
+#' run contained within it.
 #' 
 #' @param tmdb an open database connection
 #' 
-#' @return a `data.frame` of summary data describing the simulation parameters
-#' 
-#' @examples
-#' \dontrun{
-#' con <- tmdbOpen("results.db")
-#' dat <- tmdbSummary(con)
-#' tmdbClose(con)
-#' }
+#' @return A data.frame with columns RunID and TimeLength.
 #' 
 #' @export
 #' 
@@ -19,22 +15,7 @@ tmdbSummary <- function(tmdb) {
     return(invisible(NULL))
   }
   
-  df <- RSQLite::dbGetQuery(tmdb, "SELECT COUNT(*) FROM runs")
-  if ( is.na(df[1,1]) ) {
-    cat("Database is empty \n")
-    return(invisible())
-  }
-  
-  numRuns <- df[1,1]
-  
-  df <- RSQLite::dbGetQuery(tmdb, 
-      paste("SELECT p.ID AS ParamSetID, p.InitialCohorts, p.Rain, p.Fire, p.FireIntFunc, ",
-            "p.FirePatchFunc, p.FireCanopyFunc, p.FireEarlyProb, ",
-            "p.Thinning, p.Special, p.SeedSurv, p.OverlapMatrix, ",
-            "s.Spp, count(runs.ID) as NumRuns",
-            "FROM runs JOIN paramsets AS p ON runs.ParamSetID = p.ID",
-            "JOIN (select ID, group_concat(Name) as Spp from species group by ID) AS s ON p.SpeciesSetID = s.ID",
-            "GROUP BY p.ID"))
-  
+  df <- RSQLite::dbGetQuery(tmdb, "SELECT RunID, COUNT(*) AS TimeLength FROM commondata GROUP BY RunID")
+
   df
 }

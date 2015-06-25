@@ -2,7 +2,7 @@
 % Please edit documentation in R/tmdbSummary.R
 \name{tmdbSummary}
 \alias{tmdbSummary}
-\title{Generate a summary of the contents of a \code{\link{tmRun}} output database.}
+\title{Summarize a simulation output database.}
 \usage{
 tmdbSummary(tmdb)
 }
@@ -10,16 +10,10 @@ tmdbSummary(tmdb)
 \item{tmdb}{an open database connection}
 }
 \value{
-a `data.frame` of summary data describing the simulation parameters
+A data.frame with columns RunID and TimeLength.
 }
 \description{
-Generate a summary of the contents of a \code{\link{tmRun}} output database.
-}
-\examples{
-\dontrun{
-con <- tmdbOpen("results.db")
-dat <- tmdbSummary(con)
-tmdbClose(con)
-}
+Queries the output database for the ID value and time length of each
+run contained within it.
 }
 
