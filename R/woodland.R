@@ -16,6 +16,9 @@
 #' @docType package
 #' @name woodland
 #' 
+#' @importFrom dplyr %>%
+#' @importFrom ggplot2 ggplot aes facet_wrap geom_line labs theme theme_bw
+#' 
 #' @importFrom Rcpp sourceCpp
 #' @useDynLib woodland
 #' 

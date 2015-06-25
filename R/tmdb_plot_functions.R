@@ -2,52 +2,76 @@
 #'
 #' @param tmdb an open connection to a \code{\link{tmRun}} output database
 #'
-#' @param val name (character) of the variable to plot. The values plotted
+#' @param plot.var The name (character) of the variable to plot. The values plotted
 #'   will be the sum of individual cohort values for each year.
 #'
-#' @param runid a vector of one or more run ID values, each of which will
+#' @param run A vector of one or more run ID values, each of which will
 #'   be used to retrieve data for a separate plot
 #'
-#' @param show.legend if TRUE, legend is added to each plot
+#' @param show.legend If TRUE, legend is added to each plot
 #'
-#' @param plot.total if TRUE, and there are two or more species in the results,
+#' @param plot.total If TRUE, and there are two or more species in the results,
 #'   plot the combined value in addition to that for each species
 #'
-#' @importFrom ggplot2 ggplot aes facet_wrap geom_line labs theme theme_bw
-#' 
+#' @param extra.sql Additional conditions to apply when querying the database
+#'   for plot data. See example.
+#'   
+#' @examples
+#' \dontrun{
+#' ## Plot the number of trees of each species in runs 1 to 4
+#' tmdbPlot(con, plot="n", run=1:4)
+#'
+#' ## Same plot but for subset of trees with height 5-10m
+#' tmdbPlot(con, plot="n", run=1:4, extra.sql="height >= 5 and height <= 10")
+#' }
+#'
 #' @export
 #' 
 tmdbPlot <- function(tmdb, 
-                     val=c("mergedarea", "basalarea", "corearea", "resourceuse", "n"), 
-                     runid=1, 
+                     plot.var=c("n", "mergedarea", "basalarea", "corearea", "resourceuse"), 
+                     run=1, 
                      show.legend=TRUE, 
-                     plot.total=TRUE) {
+                     plot.total=TRUE,
+                     extra.sql="") {
 
   if (!tmdbValidate(tmdb, FALSE)) {
     return(invisible(NULL))
   }
   
-  ARG.NAMES <- c("mergedarea", "basalarea", "corearea", "resourceuse", "n")
-  SQL.NAMES <- c("MergedArea", "BasalArea", "CoreAreaGeneral", "ResourceUse", "N")
-  DISPLAY.NAMES <- c("merged area", "basal area", "core area", "resource use", "num trees")
+  ARG.NAMES <- c("n", "mergedarea", "basalarea", "corearea", "resourceuse")
+  SQL.NAMES <- c("N", "MergedArea", "BasalArea", "CoreAreaGeneral", "ResourceUse")
+  DISPLAY.NAMES <- c("number of trees", "merged area", "basal area", "core area", "resource use")
   
-  valIndex <- match( match.arg(val, ARG.NAMES), ARG.NAMES )
+  plot.var <- match.arg(plot.var, ARG.NAMES)
+  varIndex <- match(plot.var, ARG.NAMES )
+
+  extra.sql <- stringr::str_trim(extra.sql)
 
   # For plotting merged area we use a specific function because the data
   # are in the commondata table rather than cohortyearly
-  if (valIndex == 1) {  
-    return( tmdbPlotMergedArea(tmdb, runid) )
+  if (plot.var == "mergedarea") {
+    if (extra.sql != "") 
+      warning("extra.sql not yet supported for merged canopy area plot")
+  
+    return( tmdbPlotMergedArea(tmdb, run) )
+  }
+  
+  if (extra.sql != "") {
+    leading.and <- stringr::str_detect(extra.sql, stringr::ignore.case("^and "))
+    if (!leading.and) extra.sql <- paste("AND", extra.sql, collapse = " ")
   }
 
   # query for individual species values 
-  sql <- paste("SELECT RunID, Time, SpeciesID, SUM(", SQL.NAMES[valIndex], 
-               ") AS SpeciesValue FROM cohortyearly WHERE RunID IN (",
-               paste(runid, collapse=","), ") GROUP BY RunID, Time, SpeciesID")             
+  sql <- paste("SELECT RunID, Time, SpeciesID, SUM(", SQL.NAMES[varIndex], 
+               ") AS SpeciesValue FROM cohortyearly",
+               "WHERE RunID IN (", paste(run, collapse=","), ")",
+               extra.sql,
+               "GROUP BY RunID, Time, SpeciesID")             
                
   df.data <- RSQLite::dbGetQuery(tmdb, sql)
 
   sql <- paste("SELECT RunID, SpeciesID, Name FROM species",
-               "WHERE RunID IN (", paste(runid, collapse=","), ") ORDER BY RunID, SpeciesID")
+               "WHERE RunID IN (", paste(run, collapse=","), ") ORDER BY RunID, SpeciesID")
 
   df.spp <- RSQLite::dbGetQuery(tmdb, sql)
   NSPP <- length(unique(df.data$SpeciesID))
@@ -55,11 +79,11 @@ tmdbPlot <- function(tmdb,
     plot.total <- FALSE
   }
   
-  NPLOTS <- sum( runid %in% df.data$RunID )
+  NPLOTS <- sum( run %in% df.data$RunID )
   if (NPLOTS == 0) {
     warning("None of the requested run IDs are in the database")
     return(invisible(NULL))
-  } else if (NPLOTS < length(runid)) {
+  } else if (NPLOTS < length(run)) {
     warning("Some requested run IDs are not present in the database")
   }
 
@@ -77,7 +101,7 @@ tmdbPlot <- function(tmdb,
   
   g <- ggplot(data=df.data) +
     theme_bw() +
-    labs(x="time", y=DISPLAY.NAMES[valIndex]) +
+    labs(x="time", y=DISPLAY.NAMES[varIndex]) +
     geom_line(aes(x=Time, y=SpeciesValue, colour=Name))
   
   if (!show.legend) {
@@ -93,18 +117,18 @@ tmdbPlot <- function(tmdb,
 
 # Helper for tmdbPlot which handles plotting of merged area
 #
-tmdbPlotMergedArea <- function(tmdb, runid) {
+tmdbPlotMergedArea <- function(tmdb, run) {
   
   sql <- paste( "SELECT RunID, Time, MergedArea FROM commondata WHERE RunID IN (",
-                paste(runid, collapse=","), ") GROUP BY RunID, Time" )
+                paste(run, collapse=","), ") GROUP BY RunID, Time" )
   
   df.data <- RSQLite::dbGetQuery(tmdb, sql)
   
-  NPLOTS <- sum( runid %in% df.data$RunID )
+  NPLOTS <- sum( run %in% df.data$RunID )
   if (NPLOTS == 0) {
     warning("None of the requested run IDs are in the database")
     return(invisible(NULL))
-  } else if (NPLOTS < length(runid)) {
+  } else if (NPLOTS < length(run)) {
     warning("Some requested run IDs are not present in the database")
   }
 

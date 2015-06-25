@@ -157,9 +157,6 @@
 #' 
 #' @export
 #' 
-#' @importFrom dplyr group_by summarise %>%
-#' @importFrom stringr str_trim
-#' 
 tmRun <- function (Spp, 
                    initial.cohorts, 
                    rain, 
@@ -179,7 +176,6 @@ tmRun <- function (Spp,
                    database.path=NULL,
                    run.id=1)
 {
-  requireNamespace("RSQLite", quietly = FALSE)
 
   #===============================================================
   # Magic numbers (TODO: consider moving these to species params)
@@ -585,14 +581,14 @@ tmRun <- function (Spp,
   #  Helper function - compare strings ignoring case and leading / trailing white-space
   # ====================================================================================
   stringEqualsIgnoreCase <- function( s1, s2 ) {
-    tolower( str_trim(s1) ) == tolower( str_trim(s2) )
+    tolower( stringr::str_trim(s1) ) == tolower( stringr::str_trim(s2) )
   }
   
   # ====================================================================================
   #  Helper function - case-insensitive string match
   # ====================================================================================
   StringMatch <- function( x, table ) {
-    match( tolower( str_trim(x) ), tolower( str_trim(table) ) )
+    match( tolower( stringr::str_trim(x) ), tolower( stringr::str_trim(table) ) )
   }
   
   # ====================================================================================

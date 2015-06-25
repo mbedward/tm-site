@@ -4,24 +4,37 @@
 \alias{tmdbPlot}
 \title{Plots yearly summed value (across cohorts by species) for a chosen variable.}
 \usage{
-tmdbPlot(tmdb, val = c("mergedarea", "basalarea", "corearea", "resourceuse",
-  "n"), runid = 1, show.legend = TRUE, plot.total = TRUE)
+tmdbPlot(tmdb, plot.var = c("n", "mergedarea", "basalarea", "corearea",
+  "resourceuse"), run = 1, show.legend = TRUE, plot.total = TRUE,
+  extra.sql = "")
 }
 \arguments{
 \item{tmdb}{an open connection to a \code{\link{tmRun}} output database}
 
-\item{val}{name (character) of the variable to plot. The values plotted
+\item{plot.var}{The name (character) of the variable to plot. The values plotted
   will be the sum of individual cohort values for each year.}
 
-\item{runid}{a vector of one or more run ID values, each of which will
+\item{run}{A vector of one or more run ID values, each of which will
   be used to retrieve data for a separate plot}
 
-\item{show.legend}{if TRUE, legend is added to each plot}
+\item{show.legend}{If TRUE, legend is added to each plot}
 
-\item{plot.total}{if TRUE, and there are two or more species in the results,
+\item{plot.total}{If TRUE, and there are two or more species in the results,
   plot the combined value in addition to that for each species}
+
+\item{extra.sql}{Additional conditions to apply when querying the database
+  for plot data. See example.}
 }
 \description{
 Plots yearly summed value (across cohorts by species) for a chosen variable.
+}
+\examples{
+\dontrun{
+## Plot the number of trees of each species in runs 1 to 4
+tmdbPlot(con, plot="n", run=1:4)
+
+## Same plot but for subset of trees with height 5-10m
+tmdbPlot(con, plot="n", run=1:4, extra.sql="height >= 5 and height <= 10")
+}
 }
 
