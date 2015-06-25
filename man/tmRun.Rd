@@ -9,7 +9,8 @@ tmRun(Spp, initial.cohorts, rain, stand.area = 10000,
   fire.patchiness.func = NULL, fire.canopy.func = NULL,
   fire.early.prob = 0, overlap.matrix = 0, ov.gen = 0,
   recruitment = TRUE, thinning = NULL, special = NULL,
-  seedling.survival = NULL, session.settings = NULL, database = NULL)
+  seedling.survival = NULL, session.settings = NULL, database.path = NULL,
+  run.id = 1)
 }
 \arguments{
 \item{Spp}{Either a single object or a \code{list} of objects
@@ -96,15 +97,16 @@ tmRun(Spp, initial.cohorts, rain, stand.area = 10000,
 \item{session.settings}{Optional named list of settings for blah blah. See
   \strong{Session settings} for details.}
 
-\item{database}{an optional existing SQLite database connection to write results
-  and metadata to. If not provided, a new database will be created.}
+\item{database.path}{Path for the output SQLite database. If not provided
+  the database will be written to a temporary file, which can then be saved to
+  a permanent file with \code{\link{tmdbSave}}.}
+
+\item{run.id}{An integer identifier that will be included in each of the
+  output database tables. Useful when the outputs of mutliple runs are to
+  be aggregated (e.g. by \code{\link{tmDriver}}).}
 }
 \value{
-Returns a connection to the output SQLite database. If the
-  \code{database} argument was NULL (default) then this will point to a
-  temporary file which can be saved using the \code{\link{tmdbSave}}
-  function. If an open connection to an existing database was provided via
-  the \code{database} argument, then this same connection will be returned.
+Returns a connection to the output SQLite database.
 }
 \description{
 \code{tmRun} simulates the dynamics of cohorts of one or more tree species

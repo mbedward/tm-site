@@ -28,8 +28,10 @@ tmdbSummary <- function(tmdb) {
   numRuns <- df[1,1]
   
   df <- RSQLite::dbGetQuery(tmdb, 
-      paste("SELECT p.ID AS ParamSetID, p.InitialCohorts, p.Rain, p.Fire, p.FireFunc,",
-            "p.Thinning, p.Special, p.SeedSurv, p.OverlapMatrix, s.Spp, count(runs.ID) as NumRuns",
+      paste("SELECT p.ID AS ParamSetID, p.InitialCohorts, p.Rain, p.Fire, p.FireIntFunc, ",
+            "p.FirePatchFunc, p.FireCanopyFunc, p.FireEarlyProb, ",
+            "p.Thinning, p.Special, p.SeedSurv, p.OverlapMatrix, ",
+            "s.Spp, count(runs.ID) as NumRuns",
             "FROM runs JOIN paramsets AS p ON runs.ParamSetID = p.ID",
             "JOIN (select ID, group_concat(Name) as Spp from species group by ID) AS s ON p.SpeciesSetID = s.ID",
             "GROUP BY p.ID"))

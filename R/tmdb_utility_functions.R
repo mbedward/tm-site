@@ -144,9 +144,6 @@ tmdbValidate <- function (tmdb, show.output=TRUE)
     "cohortyearly", 
     "cohortsummary", 
     "commondata", 
-    "runs", 
-    "paramsets", 
-    "paramobjects", 
     "species")
   
   if (show.output) {

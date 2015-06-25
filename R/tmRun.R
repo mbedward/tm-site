@@ -144,15 +144,16 @@
 #' 
 #' @param session.settings Optional named list of settings for blah blah. See 
 #'   \strong{Session settings} for details.
-#' 
-#' @param database an optional existing SQLite database connection to write results
-#'   and metadata to. If not provided, a new database will be created.
 #'   
-#' @return Returns a connection to the output SQLite database. If the
-#'   \code{database} argument was NULL (default) then this will point to a
-#'   temporary file which can be saved using the \code{\link{tmdbSave}}
-#'   function. If an open connection to an existing database was provided via
-#'   the \code{database} argument, then this same connection will be returned.
+#' @param database.path Path for the output SQLite database. If not provided
+#'   the database will be written to a temporary file, which can then be saved to
+#'   a permanent file with \code{\link{tmdbSave}}.
+#' 
+#' @param run.id An integer identifier that will be included in each of the 
+#'   output database tables. Useful when the outputs of mutliple runs are to
+#'   be aggregated (e.g. by \code{\link{tmDriver}}).
+#'   
+#' @return Returns a connection to the output SQLite database.
 #' 
 #' @export
 #' 
@@ -174,8 +175,9 @@ tmRun <- function (Spp,
                    thinning=NULL, 
                    special=NULL, 
                    seedling.survival=NULL, 
-                   session.settings=NULL, 
-                   database=NULL )
+                   session.settings=NULL,
+                   database.path=NULL,
+                   run.id=1)
 {
   requireNamespace("RSQLite", quietly = FALSE)
 
@@ -194,55 +196,6 @@ tmRun <- function (Spp,
   # its current height is less than this proportion.
   COPPICE_BOOST_PROP <- 0.7
   
-
-  
-  # ====================================================================================
-  #  Get the names of objects passed as args. Any arguments which are expressions are
-  #  evaluated at this stage.
-  # ====================================================================================
-  
-  ARG.INFO <- data.frame(
-    arg.name = c("initial.cohorts", "rain", "stand.area",
-                 "scheduled.fires", "fire.intensity.func", "fire.patchiness.func",
-                 "fire.canopy.func", "fire.early.prob",
-                 "thinning", "special", "seedling.survival", "overlap.matrix"),
-    
-    is.expr = FALSE,
-
-    obj.name = "",
-
-    db.name = c("InitialCohorts", "Rain", "StandArea",
-                "Fire", "FireIntFunc", "FirePatchFunc", 
-                "FireCanopyFunc", "FireEarlyProb",
-                "Thinning", "Special", "SeedSurv", "OverlapMatrix"),
-
-    row.names = c("init", "rain", "standArea",
-                  "fire", "fireIntFunc", "firePatchFunc", 
-                  "fireCanopyFunc", "fireEarlyProb", 
-                  "thinning", "special", "seedSurv", "overlap"),
-
-    stringsAsFactors = FALSE)
-  
-  for (i in 1:nrow(ARG.INFO)) {
-    obj <- get(ARG.INFO$arg.name[i])
-    
-    if (is.null(obj)) {
-      ARG.INFO$obj.name[i] <- "NULL"
-      
-    } else if (is.expression(obj)) {
-      ARG.INFO$obj.name[i] <- as.character(obj)
-      ARG.INFO$is.expr[i] <- TRUE
-      
-      # Evaluate the expression, with the results being assigned to an object
-      # of name given by arg.name
-      e <- parse( text=paste( ARG.INFO$arg.name[i], "<-", as.character(obj) ) )
-      eval(e)
-      
-    } else {
-      e <- parse( text=paste( "deparse(substitute(", ARG.INFO$arg.name[i], "))") )
-      ARG.INFO$obj.name[i] <- eval(e)
-    }
-  }
   
   # ====================================================================================
   #  If the spp argument is a single SpeciesParams object, wrap it in a list for
@@ -258,9 +211,7 @@ tmRun <- function (Spp,
   #  Constants, global variables and frequently accessed bits
   # ====================================================================================
   
-  # This will be initialized in the WriteMetadata function but we define it here
-  # so that it doesn't end up being <<-'d into the global environment
-  RUNID <- NA
+  RUNID <- run.id
   
   SIMULATION.PERIOD <- length(rain)
   
@@ -371,36 +322,27 @@ tmRun <- function (Spp,
     }
   }
   
-  # ====================================================================================
-  #  Helper function - Connect to the output database if one was provided or open a
-  #                    new database
-  # ====================================================================================  
-  ConnectToDatabase <- function() {
-    if (!is.null(database)) {
-      con <- database
-      
-    } else { 
-      con <- CreateNewDatabase()
-    }
-    
-    # Store parameter metadata. This also sets the global RUNID variable
-    WriteMetadata(con)
-    
-    # Return connection
-    con
-  }
   
   # ====================================================================================
   #  Helper function - Create a new SQLite database for the simulation output.
-  #  Note: some of the table definitions include foreign keys but RSQLite doesn't
-  #  seem to enforce them (perhaps have to recompile the package ?).
   # ====================================================================================  
-  CreateNewDatabase <- function() {
-    con <- RSQLite::dbConnect( RSQLite::SQLite(), tempfile() )
+  CreateDatabase <- function(path) {
+    con <- RSQLite::dbConnect( RSQLite::SQLite(), path )
+    
+    # Create the species table
+    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE species (
+                     RunID INTEGER,
+                     SpeciesID INTEGER,
+                     Name TEXT,
+                     PRIMARY KEY (RunID, SpeciesID))" ) )
+    
+    # Add species data to the table
+    df <- data.frame(RunID=RUNID, SpeciesID=1:NUM.SPP, Name=SP.NAMES)
+    RSQLite::dbWriteTable(con, "species", df, row.names=FALSE, overwrite=TRUE)
     
     # Create cohort annual data table
     RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE cohortyearly (
-                     RunID INTEGER REFERENCES runs(ID),
+                     RunID INTEGER,
                      Time INTEGER,
                      CohortID INTEGER,
                      SpeciesID INTEGER,
@@ -421,7 +363,7 @@ tmRun <- function (Spp,
     
     # Create cohort summary table
     RSQLite::dbGetQuery(con, FormatSQL( "CREATE TABLE cohortsummary (
-                     RunID INTEGER REFERENCES runs(ID),
+                     RunID INTEGER,
                      CohortID INTEGER,
                      SpeciesID INTEGER,
                      StartTime INTEGER,
@@ -441,7 +383,7 @@ tmRun <- function (Spp,
     
     # Create the common data table
     RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE commondata (
-                     RunID INTEGER REFERENCES runs(ID),
+                     RunID INTEGER,
                      Time INTEGER,
                      ResourceUse REAL, 
                      CoreAreaGeneral REAL,
@@ -454,147 +396,10 @@ tmRun <- function (Spp,
                      SeedlingSurvival REAL,
                      PRIMARY KEY (RunID, Time) )" ) )
     
-    # Create the run description table
-    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE runs (
-                     ID INTEGER PRIMARY KEY,
-                     ParamSetID INTEGER REFERENCES paramsets(ID),
-                     Replicate INTEGER,
-                     UNIQUE(ParamSetID, Replicate) )" ) )
-    
-    
-    # Create the param sets table
-    argFields <- paste(ARG.INFO$db.name, "TEXT")
-    argFields <- paste(argFields, collapse=", ")
-    
-    sql <- paste("CREATE TABLE paramsets (ID INTEGER PRIMARY KEY,", 
-                 "SpeciesSetID INTEGER REFERENCES species(ID),",
-                 argFields, ")")
-    
-    RSQLite::dbGetQuery(con, sql)
-    
-    
-    # Create the species table that lists species IDs and names
-    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE species (
-                     ID INTEGER,
-                     SpeciesID INTEGER,
-                     Name TEXT,
-                     PRIMARY KEY (ID, SpeciesID))" ) )
-    
-    # Create the paramobjects table that stores a full copy of the parameters.
-    # This has a one-to-one relationship with records in the paramsets table and
-    # the only reason we use a separate table is to avoid getting loads of binary
-    # crap returned when we do queries with "select * from paramsets".
-    RSQLite::dbGetQuery(con, FormatSQL("CREATE TABLE paramobjects (
-                     ID INTEGER PRIMARY KEY REFERENCES paramsets(ID),
-                     Data BLOB )" ) )
-    
     # Return the connection
     con
-  }
-  
-  # ====================================================================================
-  #  Helper function - Store run metadata. This is called after the database has been
-  #  opened or created. As a side-effect this function also sets the RunID variable.
-  # ====================================================================================
-  WriteMetadata <- function(dbcon) {
+  }  
 
-    # look for the species combination in the species table
-    df <- RSQLite::dbGetQuery(
-      dbcon, "SELECT ID, SpeciesID, Name FROM species order by ID, SpeciesID")
-    
-    matches <- df %>%
-      group_by(ID) %>%
-      summarise(found = all(Name == SP.NAMES))
-    
-    if (!any(matches$found)) {
-      # record this new species combination
-      spSetID <- 1
-      df <- RSQLite::dbGetQuery(dbcon, "SELECT MAX(ID) FROM species")
-      if (!is.na(df[1,1])) {
-        spSetID <- df[1,1] + 1
-      }
-      
-      for (spid in 1:NUM.SPP) {
-        sql <- paste("INSERT INTO species (ID, SpeciesID, Name) VALUES (",
-                     paste(spSetID, spid, WrapText(SP.NAMES[spid]), sep=","), ")", sep="")
-        RSQLite::dbGetQuery(dbcon, sql)
-      }
-    } else { 
-      # integrity check
-      if (sum(matches$found) != 1) {
-        stop("More than one set in the species table matches. This should never happen")
-      }
-      
-      # get the id of the existing combination 
-      spSetID <- matches$ID[ matches$found ]
-    }
-
-    sqlLine <- function(rowName) {
-      db.name <- ARG.INFO[ rowName, "db.name" ]
-      paste(" AND", db.name, "=", WrapText(ARG.INFO[rowName, "obj.name"]), sep=" ")
-    }
-
-    lines <- sapply(rownames(ARG.INFO), sqlLine)
-    lines <- paste(lines, collapse=" ")
-    
-    # search for this parameter combination in the paramsets table
-    sql <- paste("SELECT ID FROM paramsets WHERE SpeciesSetID = ", 
-                 spSetID,
-                 lines,
-                 sep = "")
-    
-    df <- RSQLite::dbGetQuery(dbcon, sql)
-    
-    if (nrow(df) == 0) {
-      # new combination: assign a param set ID, store the names and store a 
-      # snapshot of the param objects
-      paramSetID <- 1
-      df <- RSQLite::dbGetQuery(dbcon, "SELECT MAX(ID) FROM paramsets")
-      if (!is.na(df[1,1])) {
-        paramSetID <- df[1,1] + 1
-      }
-      
-      sql <- "INSERT INTO paramsets (ID, SpeciesSetID,"
-      sql <- paste(sql, paste(ARG.INFO$db.name, collapse=", "), ")")
-
-      qmarks <- paste( rep("?", 2 + nrow(ARG.INFO)), collapse=", ")
-      sql <- paste(sql, "VALUES (", qmarks, ")")
-
-      # (note the use of as.list(ARG.INFO$obj.name) to ensure that we get
-      # arg object names in separate columns)
-      RSQLite::dbGetPreparedQuery(dbcon, sql,
-        data.frame(paramSetID, spSetID, as.list(ARG.INFO$obj.name)))
-      
-      StoreParamSnapshot(dbcon, paramSetID)
-      
-    } else {
-      # existing combination
-      paramSetID <- df[1,1]
-    }
-    
-    # Record the run information in the runs table
-    df <- RSQLite::dbGetQuery(dbcon,
-                     paste("SELECT MAX(Replicate) FROM runs WHERE ParamSetID =", paramSetID))
-    
-    repNum <- 1
-    if (!is.na(df[1,1])) {
-      repNum <- df[1,1] + 1
-    }
-    
-    RSQLite::dbGetQuery(dbcon,
-               paste("INSERT INTO runs (ParamSetID, Replicate) VALUES (", paramSetID, ",", repNum, ")"))
-    
-    # Finally retrieve the global RUNID value
-    df <- RSQLite::dbGetQuery(dbcon,
-                     paste("SELECT ID FROM runs WHERE ParamSetID =", paramSetID, "AND Replicate =", repNum))
-    
-    if (nrow(df) != 1 || is.na(df[1,1])) {
-      stop("Error writing to the runs table")
-    }
-    
-    RUNID <<- df[1,1]
-  }
-  
   
   # ====================================================================================
   #  Helper function - Store a snapshot of the param objects in binary form in the
@@ -767,9 +572,13 @@ tmRun <- function (Spp,
                          flammable.proportions[1:YEAR], 
                          seedling.survival[1:YEAR])
     
-    RSQLite::dbWriteTable(dbcon, "commondata", as.data.frame(common.data), row.names=FALSE, append=TRUE)
+    RSQLite::dbWriteTable(dbcon, "commondata", 
+                          as.data.frame(common.data), 
+                          row.names=FALSE, append=TRUE)
     
-    RSQLite::dbWriteTable(dbcon, "cohortsummary", as.data.frame(CohortSummary[1:TOTAL.COHORTS, ]), row.names=FALSE, append=TRUE)
+    RSQLite::dbWriteTable(dbcon, "cohortsummary", 
+                          as.data.frame(CohortSummary[1:TOTAL.COHORTS, ]), 
+                          row.names=FALSE, append=TRUE)
   }
   
   # ====================================================================================
@@ -885,10 +694,21 @@ tmRun <- function (Spp,
   realized.prop.burnt <- numeric( SIMULATION.PERIOD )
   flammable.proportions <- numeric( SIMULATION.PERIOD )
   
-  # Connect to the output database. This will be either a user-supplied database or a 
-  # newly created one.
-  DBCON <- ConnectToDatabase()
-  
+  if (is.null(database.path)) {
+    database.path <- tempfile()
+    
+  } else if (file.exists(database.path)) {
+    ok <- file.remove(database.path)
+    if (!ok) {
+      warning("Cannot delete existing database file ", database.path,
+              ". Writing to temp file.")
+      
+      database.path <- tempfile()
+    }
+  }
+  DBCON <- CreateDatabase(database.path)
+
+
   # Add the initial cohorts to the summary table in the output database
   for ( i in 1:nrow(Cohorts) )
   {
