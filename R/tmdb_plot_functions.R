@@ -4,7 +4,7 @@
 #'
 #' @param tmdb an open connection to a \code{\link{tmRun}} output database
 #'
-#' @param plot.var The name (character) of the variable to plot: \code{"n",
+#' @param variable The name (character) of the variable to plot: \code{"n",
 #'   "mergedarea", "basalarea", "corearea", "resourceuse"} (may be abbreviated).
 #'   The values plotted will be the sum of individual cohort values for each
 #'   year.
@@ -16,6 +16,8 @@
 #'   
 #' @param plot.total If TRUE (default), and there are two or more species in the
 #'   results, plot the combined value in addition to that for each species
+#'   
+#' @param plot.fire If TRUE (default), adds fire occurrences as a rug plot. 
 #'   
 #' @param extra.sql Additional conditions to apply when querying the database
 #'   for plot data. See example.
@@ -34,10 +36,11 @@
 #' @export
 #' 
 tmdbPlot <- function(tmdb, 
-                     plot.var=c("n", "mergedarea", "basalarea", "corearea", "resourceuse"), 
+                     variable=c("n", "mergedarea", "basalarea", "corearea", "resourceuse"), 
                      run=1, 
                      show.legend=TRUE, 
                      plot.total=TRUE,
+                     plot.fire=TRUE,
                      extra.sql="") {
 
   if (!tmdbValidate(tmdb, FALSE)) {
@@ -48,18 +51,18 @@ tmdbPlot <- function(tmdb,
   SQL.NAMES <- c("N", "MergedArea", "BasalArea", "CoreAreaGeneral", "ResourceUse")
   DISPLAY.NAMES <- c("number of trees", "merged area", "basal area", "core area", "resource use")
   
-  plot.var <- match.arg(plot.var, ARG.NAMES)
-  varIndex <- match(plot.var, ARG.NAMES )
+  variable <- match.arg(variable, ARG.NAMES)
+  varIndex <- match(variable, ARG.NAMES )
 
   extra.sql <- stringr::str_trim(extra.sql)
 
   # For plotting merged area we use a specific function because the data
   # are in the commondata table rather than cohortyearly
-  if (plot.var == "mergedarea") {
+  if (variable == "mergedarea") {
     if (extra.sql != "") 
       warning("extra.sql not yet supported for merged canopy area plot")
   
-    return( tmdbPlotMergedArea(tmdb, run) )
+    return( plot_merged_area(tmdb, run, plot.fire) )
   }
   
   if (extra.sql != "") {
@@ -114,16 +117,20 @@ tmdbPlot <- function(tmdb,
     g <- g + theme(legend.position = "none")
   }
   
+  if (plot.fire) {
+    g <- g + fire_rug_plot(tmdb, run)
+  }
+  
   if (NPLOTS > 1)
     g <- g + facet_wrap(~ RunID)
   
-  g  
+  g
 }
 
 
 # Helper for tmdbPlot which handles plotting of merged area
 #
-tmdbPlotMergedArea <- function(tmdb, run) {
+plot_merged_area <- function(tmdb, run, plot.fire) {
   
   sql <- paste( "SELECT RunID, Time, MergedArea FROM commondata WHERE RunID IN (",
                 paste(run, collapse=","), ") GROUP BY RunID, Time" )
@@ -143,11 +150,26 @@ tmdbPlotMergedArea <- function(tmdb, run) {
     labs(x="time", y="merged canopy area") +
     geom_line(aes(x=Time, y=MergedArea))
   
+  if (plot.fire)
+    g <- g + fire_rug_plot(tmdb, fun)
+  
   if (NPLOTS > 1)
     g <- g + facet_wrap(~ RunID)
   
   g
 }
+
+
+fire_rug_plot <- function(tmdb, run) {
+  sql <- paste("SELECT RunID, Time FROM commondata WHERE",
+               "RunID IN (", paste(run, collapse=","), ")",
+               "AND RealizedFires > 0")
+  
+  dat <- RSQLite::dbGetQuery(tmdb, sql)
+  
+  ggplot2::geom_rug(data=dat, aes(x=Time))
+}
+
 
 # TODO  do we need this function any longer ?
 #

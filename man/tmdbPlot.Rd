@@ -4,14 +4,14 @@
 \alias{tmdbPlot}
 \title{Plot simulation outputs.}
 \usage{
-tmdbPlot(tmdb, plot.var = c("n", "mergedarea", "basalarea", "corearea",
+tmdbPlot(tmdb, variable = c("n", "mergedarea", "basalarea", "corearea",
   "resourceuse"), run = 1, show.legend = TRUE, plot.total = TRUE,
-  extra.sql = "")
+  plot.fire = TRUE, extra.sql = "")
 }
 \arguments{
 \item{tmdb}{an open connection to a \code{\link{tmRun}} output database}
 
-\item{plot.var}{The name (character) of the variable to plot: \code{"n",
+\item{variable}{The name (character) of the variable to plot: \code{"n",
   "mergedarea", "basalarea", "corearea", "resourceuse"} (may be abbreviated).
   The values plotted will be the sum of individual cohort values for each
   year.}
@@ -23,6 +23,8 @@ tmdbPlot(tmdb, plot.var = c("n", "mergedarea", "basalarea", "corearea",
 
 \item{plot.total}{If TRUE (default), and there are two or more species in the
   results, plot the combined value in addition to that for each species}
+
+\item{plot.fire}{If TRUE (default), adds fire occurrences as a rug plot.}
 
 \item{extra.sql}{Additional conditions to apply when querying the database
   for plot data. See example.}
