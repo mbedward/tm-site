@@ -64,11 +64,10 @@
 #' @param Spp Either a single object or a \code{list} of objects
 #'   of class \code{\linkS4class{SpeciesParams}} defining one or more species
 #' 
-#' @param initial.cohorts Numeric matrix with 4 columns: 
-#'   species index, age, height, number of trees.
-#'   For simulations with a single species the species index should be 1, while
-#'   for multiple species the index value is the position in the list
-#'   passed to the \code{Spp} argument.
+#' @param initial.cohorts A matrix or data.frame with 4 numeric columns: species
+#'   index, age, height, number of trees. For simulations with a single species
+#'   the species index should be 1, while for multiple species the index value
+#'   is the position in the list passed to the \code{Spp} argument.
 #'   
 #' @param rain Numeric vector of annual rainfall values. The length of this
 #'   vector determines the number of years in the simulation.
@@ -300,22 +299,24 @@ tmRun <- function (Spp,
   # ====================================================================================
   #  Helper function - Set session settings
   # ====================================================================================  
-  SetSession <- function() {
-    if (is.null(session.settings)) {
-      session.settings <<- list()
-    }
+  SetSession <- function(settings) {
+    if (is.null(settings)) settings <- list()
+    
+    # the 'verbose' option turns on all output messages
+    if (is.null(settings$verbose)) settings$verbose <- FALSE
     
     # the 'progress.interval' option is a numeric value that sets
     # the time between progress reporint on screen
-    if (is.null(session.settings$progress.interval)) {
-      session.settings$progress.interval <<- 0 # no progress messages
-    }
+    if (is.null(settings$progress.interval)) 
+      settings$progress.interval <- 0 # no progress messages
     
     # the 'display.fire.data' option enables printing fire data to
     # the screen
-    if (is.null(session.settings$display.fire.data)) {
-      session.settings$display.fire.data <<- FALSE
-    }
+    if (is.null(settings$display.fire.data))
+      settings$display.fire.data <- settings$verbose
+    
+    # Return settings list
+    settings
   }
   
   
@@ -579,7 +580,7 @@ tmRun <- function (Spp,
   #  Model starts here
   # ====================================================================================
   
-  SetSession()
+  session.settings <- SetSession(session.settings)
   
   # If an overlap matrix wasn't provided, create a default one
   if (is.null(overlap.matrix) || is.vector(overlap.matrix)) {
@@ -616,24 +617,27 @@ tmRun <- function (Spp,
   # If the input has 5 cols assume it's an old one, ignore the first col, and 
   # issue a message
   
-  if ( !is.matrix(initial.cohorts) | ncol(initial.cohorts) < 4 | ncol(initial.cohorts) > 5 ) 
-    stop("Expected a 4 col matrix for initial cohorts (or an old 5 col matrix")
-  
-  initial.cohorts.cols <- 1:4
-  if ( ncol(initial.cohorts) == 5 ) {
-    initial.cohorts.cols <- 2:5
-    cat( "Initial cohorts matrix has 5 cols - assuming it is an old version \n" )
+  icdim <- dim(initial.cohorts)
+  if ( is.null(icdim) ||
+       icdim[1] < 1 ||
+       icdim[2] != 4 ) {
+    
+    stop("initial.cohorts argument should be a 4 column matrix ",
+         "or data.frame with 1 or more rows")
   }
+  
+  initial.cohorts <- as.matrix(initial.cohorts)
   
   num.initial.cohorts <- nrow(initial.cohorts) 
   
-  cat( num.initial.cohorts, "initial cohorts \n" )
+  if (session.settings$verbose)
+    cat( num.initial.cohorts, "initial cohorts \n" )
   
   max.num.cohorts <- num.initial.cohorts + SIMULATION.PERIOD * NUM.SPP
   
   Cohorts <- matrix(0, nrow=num.initial.cohorts, ncol=NUM.COHORTS.COLS)
   Cohorts[ , colID ] <- 1:num.initial.cohorts
-  Cohorts[ , c(colSpID, colAge, colHeight, colN) ] <- initial.cohorts[ , initial.cohorts.cols ]
+  Cohorts[ , c(colSpID, colAge, colHeight, colN) ] <- initial.cohorts
   Cohorts[ , colFormerHt ] <- -1
   for (i in 1:nrow(Cohorts)) {
     Cohorts[ i, c( colCanopyRadius, colResourceUse, colDBH, colBasalArea ) ] <- GetTreeDescriptors( Cohorts[i, colID] )
@@ -898,13 +902,17 @@ tmRun <- function (Spp,
             }
             
             Cohorts[irow, colHeight] <- cut.h
-            cat( "cut cohort", cohort.id, "in year", YEAR, "to height", cut.h, "\n" )
+            
+            if (session.settings$verbose)
+              cat( "cut cohort", cohort.id, "in year", YEAR, "to height", cut.h, "\n" )
           }          
         }
         else
         {
-          cat( "cohort", special[i, specialColCohortID], 
-               "died before special action in year", YEAR, "\n" )
+          if (session.settings$verbose) {
+            cat( "cohort", special[i, specialColCohortID], 
+                 "died before special action in year", YEAR, "\n" )
+          }
         }
       }
     }
@@ -1039,7 +1047,6 @@ tmRun <- function (Spp,
       #==============================================================
       # Survival
       #==============================================================
-      #print( "Survival" );  flush.console()
       p.base <- pars@survival_prob[ min(length( pars@survival_prob ), Cohorts[i, colAge]) ]
       
       if ( pars@canCoppice && 
@@ -1078,7 +1085,8 @@ tmRun <- function (Spp,
     
     if ( recruitment[YEAR] )
     {
-      #print( "Recruitment" );  flush.console()
+      if (session.settings$verbose)
+        cat( "Recruitment \n" )
       
       num.stems <- sum(Cohorts[, colN])
       
@@ -1206,11 +1214,16 @@ tmRun <- function (Spp,
       flammable.proportions[YEAR] <- flammable.prop
       
       if (session.settings$display.fire.data) {
-        print( paste( "total.core.area.post.growth: ", total.core.area.post.growth ) ) 
-        print( paste( "flammable.area: ",flammable.area ) )
-        print( paste("flam prop:", flammable.prop ) )
-        print( paste("realized intensity of: ",realized.intensity, " in year ",YEAR ) )
-        flush.console()
+        s <- paste( 
+          "year: ", YEAR, "\n",
+          "total.core.area.post.growth: ", total.core.area.post.growth, "\n",
+          "flammable.area: ", flammable.area, "\n",
+          "flam prop: ", flammable.prop, "\n",
+          "scheduled intensity: ", scheduled.fires[YEAR], "\n",
+          "realized intensity: ", realized.intensity, "\n", 
+          sep="")
+        
+        cat(s)
       }
       
       # Test if we are modelling this as an early fire (pre-recruitment) or a late fire (post-recruitment)
@@ -1336,7 +1349,8 @@ tmRun <- function (Spp,
     # external seed input
     if (nrow(Cohorts) == 0 && !EXTERNAL.SEED) {
       if (YEAR < SIMULATION.PERIOD) {
-        print(paste("All cohorts extinct at year", YEAR))
+        if (session.settings$verbose) cat("All cohorts extinct at year", YEAR, "\n")
+        
         break
       }
     }

@@ -16,8 +16,8 @@ tmdbPlot(tmdb, variable = c("n", "mergedarea", "basalarea", "corearea",
   The values plotted will be the sum of individual cohort values for each
   year.}
 
-\item{run}{A vector of one or more run ID values (default = 1), each of which
-  will be used to retrieve data for a separate plot}
+\item{run}{A vector of one or more run ID values (default = 1) to plot, or
+  the keyword \code{"all"}.}
 
 \item{show.legend}{If TRUE (default), legend is added to each plot}
 

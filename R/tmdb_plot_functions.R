@@ -9,8 +9,8 @@
 #'   The values plotted will be the sum of individual cohort values for each
 #'   year.
 #'   
-#' @param run A vector of one or more run ID values (default = 1), each of which
-#'   will be used to retrieve data for a separate plot
+#' @param run A vector of one or more run ID values (default = 1) to plot, or
+#'   the keyword \code{"all"}.
 #'   
 #' @param show.legend If TRUE (default), legend is added to each plot
 #'   
@@ -56,6 +56,13 @@ tmdbPlot <- function(tmdb,
 
   extra.sql <- stringr::str_trim(extra.sql)
 
+  if (!is.numeric(run)) {
+    if (tolower(run) == "all") {
+      n <- get_num_runs(tmdb)
+      run <- 1:n
+    }
+  }
+  
   # For plotting merged area we use a specific function because the data
   # are in the commondata table rather than cohortyearly
   if (variable == "mergedarea") {
@@ -69,7 +76,7 @@ tmdbPlot <- function(tmdb,
     leading.and <- stringr::str_detect(extra.sql, stringr::ignore.case("^and "))
     if (!leading.and) extra.sql <- paste("AND", extra.sql, collapse = " ")
   }
-
+  
   # query for individual species values 
   sql <- paste("SELECT RunID, Time, SpeciesID, SUM(", SQL.NAMES[varIndex], 
                ") AS SpeciesValue FROM cohortyearly",
@@ -168,6 +175,13 @@ fire_rug_plot <- function(tmdb, run) {
   dat <- RSQLite::dbGetQuery(tmdb, sql)
   
   ggplot2::geom_rug(data=dat, aes(x=Time))
+}
+
+
+get_num_runs <- function(tmdb) {
+  sql <- "SELECT DISTINCT(RunID) FROM commondata"
+  dat <- RSQLite::dbGetQuery(tmdb, sql)
+  nrow(dat)
 }
 
 

@@ -16,11 +16,10 @@ tmRun(Spp, initial.cohorts, rain, stand.area = 10000,
 \item{Spp}{Either a single object or a \code{list} of objects
   of class \code{\linkS4class{SpeciesParams}} defining one or more species}
 
-\item{initial.cohorts}{Numeric matrix with 4 columns:
-  species index, age, height, number of trees.
-  For simulations with a single species the species index should be 1, while
-  for multiple species the index value is the position in the list
-  passed to the \code{Spp} argument.}
+\item{initial.cohorts}{A matrix or data.frame with 4 numeric columns: species
+  index, age, height, number of trees. For simulations with a single species
+  the species index should be 1, while for multiple species the index value
+  is the position in the list passed to the \code{Spp} argument.}
 
 \item{rain}{Numeric vector of annual rainfall values. The length of this
   vector determines the number of years in the simulation.}
