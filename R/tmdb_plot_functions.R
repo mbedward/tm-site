@@ -1,20 +1,26 @@
-#' Plots yearly summed value (across cohorts by species) for a chosen variable.
+#' Plot simulation outputs.
+#' 
+#' Plots yearly value, summed across cohorts by species, for a chosen variable.
 #'
 #' @param tmdb an open connection to a \code{\link{tmRun}} output database
 #'
-#' @param plot.var The name (character) of the variable to plot. The values plotted
-#'   will be the sum of individual cohort values for each year.
-#'
-#' @param run A vector of one or more run ID values, each of which will
-#'   be used to retrieve data for a separate plot
-#'
-#' @param show.legend If TRUE, legend is added to each plot
-#'
-#' @param plot.total If TRUE, and there are two or more species in the results,
-#'   plot the combined value in addition to that for each species
-#'
+#' @param plot.var The name (character) of the variable to plot: \code{"n",
+#'   "mergedarea", "basalarea", "corearea", "resourceuse"} (may be abbreviated).
+#'   The values plotted will be the sum of individual cohort values for each
+#'   year.
+#'   
+#' @param run A vector of one or more run ID values (default = 1), each of which
+#'   will be used to retrieve data for a separate plot
+#'   
+#' @param show.legend If TRUE (default), legend is added to each plot
+#'   
+#' @param plot.total If TRUE (default), and there are two or more species in the
+#'   results, plot the combined value in addition to that for each species
+#'   
 #' @param extra.sql Additional conditions to apply when querying the database
 #'   for plot data. See example.
+#'   
+#' @return A ggplot object.
 #'   
 #' @examples
 #' \dontrun{

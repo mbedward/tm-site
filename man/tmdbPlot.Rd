@@ -2,7 +2,7 @@
 % Please edit documentation in R/tmdb_plot_functions.R
 \name{tmdbPlot}
 \alias{tmdbPlot}
-\title{Plots yearly summed value (across cohorts by species) for a chosen variable.}
+\title{Plot simulation outputs.}
 \usage{
 tmdbPlot(tmdb, plot.var = c("n", "mergedarea", "basalarea", "corearea",
   "resourceuse"), run = 1, show.legend = TRUE, plot.total = TRUE,
@@ -11,22 +11,27 @@ tmdbPlot(tmdb, plot.var = c("n", "mergedarea", "basalarea", "corearea",
 \arguments{
 \item{tmdb}{an open connection to a \code{\link{tmRun}} output database}
 
-\item{plot.var}{The name (character) of the variable to plot. The values plotted
-  will be the sum of individual cohort values for each year.}
+\item{plot.var}{The name (character) of the variable to plot: \code{"n",
+  "mergedarea", "basalarea", "corearea", "resourceuse"} (may be abbreviated).
+  The values plotted will be the sum of individual cohort values for each
+  year.}
 
-\item{run}{A vector of one or more run ID values, each of which will
-  be used to retrieve data for a separate plot}
+\item{run}{A vector of one or more run ID values (default = 1), each of which
+  will be used to retrieve data for a separate plot}
 
-\item{show.legend}{If TRUE, legend is added to each plot}
+\item{show.legend}{If TRUE (default), legend is added to each plot}
 
-\item{plot.total}{If TRUE, and there are two or more species in the results,
-  plot the combined value in addition to that for each species}
+\item{plot.total}{If TRUE (default), and there are two or more species in the
+  results, plot the combined value in addition to that for each species}
 
 \item{extra.sql}{Additional conditions to apply when querying the database
   for plot data. See example.}
 }
+\value{
+A ggplot object.
+}
 \description{
-Plots yearly summed value (across cohorts by species) for a chosen variable.
+Plots yearly value, summed across cohorts by species, for a chosen variable.
 }
 \examples{
 \dontrun{

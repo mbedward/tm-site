@@ -2,7 +2,7 @@
 % Please edit documentation in R/tmDriver.R
 \name{tmDriver}
 \alias{tmDriver}
-\title{Driver function}
+\title{Runs \code{tmRun} in batch mode.}
 \usage{
 tmDriver(funs, nmajor = 1, nminor = 1)
 }
@@ -19,5 +19,22 @@ function is free to interpret these in any way, or ignore them completely.
 For example, in a study of rainfall effects, major number may relate to an
 overall average rainfall value while the minor number is simply the replicate
 index within each rainfall average.
+}
+\examples{
+\dontrun{
+# List of parameter generating functions, with list element names
+# corresonding to (abbreviated) tmRun argument names
+fns <- list(
+  # Constant objects for Spp and initial.cohorts arguments
+  Spp = my.params,
+  init = my.initial.cohorts,
+
+  # Rainfall function
+  rain = function(maj, min) {
+    avg <- ifelse(maj == 1, 500, 600)
+    runif(100, avg - 100, avg + 100)
+  }
+
+}
 }
 

@@ -1,4 +1,4 @@
-#' Driver function
+#' Runs \code{tmRun} in batch mode.
 #' 
 #' Generating functions take two parameters: major and minor run number. Each
 #' function is free to interpret these in any way, or ignore them completely.
@@ -11,6 +11,23 @@
 #'   parameters (major and minor run number) and returns an object appropriate
 #'   for the particular argument (e.g. a generating function for the \code{'rain'})
 #'   argument would return a vector of annual rainfall values.
+#' 
+#' @examples
+#' \dontrun{
+#' # List of parameter generating functions, with list element names
+#' # corresonding to (abbreviated) tmRun argument names
+#' fns <- list(
+#'   # Constant objects for Spp and initial.cohorts arguments
+#'   Spp = my.params, 
+#'   init = my.initial.cohorts,
+#'   
+#'   # Rainfall function
+#'   rain = function(maj, min) {
+#'     avg <- ifelse(maj == 1, 500, 600)
+#'     runif(100, avg - 100, avg + 100)
+#'   }
+#'   
+#' }
 #' 
 #' @export
 #' 
@@ -45,22 +62,12 @@ tmDriver <- function(funs, nmajor=1, nminor=1) {
     stop("Missing mandatory argument function(s): ", s)
   }
   
-  # Finally, make sure everything in funs is a function
-  isfn <- sapply(funs, is.function)
-  if (!all(isfn)) {
-    s <- paste(fnames[!isfn], collapse=", ")
-    stop("All elements in \'funs\' should be functions. Check: ", s)
-  }
-  
-  
-  # Run loop
-  browser()
   
   db.out <- NULL
   run.id <- 1
   for (M in 1:nmajor) {
     for (m in 1:nminor) {
-      params <- lapply(funs, function(f) f(M, m))
+      params <- lapply(funs, function(el) if (is.function(el)) el(M, m) else el)
       params$run.id <- run.id
       
       db.rep <- do.call(tmRun, params)
@@ -78,13 +85,13 @@ tmDriver <- function(funs, nmajor=1, nminor=1) {
 combineDB <- function(db1, db2) {
   newdb <- FALSE
   if (is.null(db1)) {
-    db1 <- dbConnect(RSQLite::SQLite(), tempfile())
+    db1 <- RSQLite::dbConnect(RSQLite::SQLite(), tempfile())
     newdb <- TRUE
   }
   
-  for (tbl in dbListTables(db2)) {
-    dat <- dbReadTable(db2, tbl)
-    dbWriteTable(db1, tbl, dat, append=!newdb, overwrite=newdb)
+  for (tbl in RSQLite::dbListTables(db2)) {
+    dat <- RSQLite::dbReadTable(db2, tbl)
+    RSQLite::dbWriteTable(db1, tbl, dat, append=!newdb, overwrite=newdb)
   }
   
   db1

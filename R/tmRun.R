@@ -398,39 +398,6 @@ tmRun <- function (Spp,
 
   
   # ====================================================================================
-  #  Helper function - Store a snapshot of the param objects in binary form in the
-  #  paramobjects database table
-  # ====================================================================================
-  StoreParamSnapshot <- function(dbcon, paramSetID) {
-    params <- list(Spp = Spp, 
-                   initial.cohorts = initial.cohorts, 
-                   rain = rain, 
-                   stand.area = stand.area,
-                   scheduled.fires = scheduled.fires, 
-                   fire.intensity.func = fire.intensity.func, 
-                   fire.patchiness.func = fire.patchiness.func,
-                   fire.canopy.func = fire.canopy.func,
-                   fire.early.prob = fire.early.prob,
-                   overlap.matrix = overlap.matrix, 
-                   ov.gen = ov.gen,
-                   recruitment = recruitment,
-                   thinning = thinning, 
-                   special = special, 
-                   seedling.survival = seedling.survival ) 
-    
-    object.data <- rawToChar(serialize(params, NULL, ascii=TRUE))
-    
-    # Using a dbGetPreparedQuery seems to work with large blobs of param data whereas using
-    # dbGetQuery sometimes fails. Also note the WrapText function isn't required when using
-    # dbGetPreparedQuery.
-    RSQLite::dbGetPreparedQuery(dbcon, 
-                       "INSERT INTO paramobjects (ID, Data) VALUES (?, ?)",
-                       data.frame(ID=paramSetID, Data=object.data, stringsAsFactors=FALSE))
-  }
-  
-  
-  
-  # ====================================================================================
   #  Helper function - Get the Cohorts matrix row index for the given cohort
   # ====================================================================================
   GetCohortRow <- function( cohort.id ) {
