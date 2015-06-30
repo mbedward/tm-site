@@ -45,18 +45,21 @@
 #' # Simulation length as a global var
 #' SimLen <- 500
 #' 
+#' # This example also assumes that there is an object 'spp.params' 
+#' # in the global environment
+#' 
 #' # The list of parameter generators, with list element names
 #' # corresonding to (abbreviated) tmRun argument names
 #' funs <- list(
 #'   # Constant object for Spp argument
-#'   Spp = my.spp.params, 
+#'   Spp = spp.params, 
 #'   
 #'   # Function to generate initial cohort table.
 #'   # Same behaviour over all simulations so the function
 #'   # ignores major and minor arguments.
 #'   #
 #'   init = function(...) {
-#'     Nspp <- length(my.spp.params)
+#'     Nspp <- length(spp.params)
 #'     data.frame(sp = 1:Nspp, 
 #'                age = sample(20:50, Nspp),
 #'                height = runif(Nspp, 5, 10),
@@ -92,11 +95,35 @@
 #' # combination
 #' con <- tmDriver(funs, major = nrow(param.combos), minor = 100)
 #' 
+#' ### Example of running the above in parallel (3 cores)
+#' 
+#' # Create a cluster and register it
+#' library(doParallel)
+#' cl <- makeCluster(3)
+#' registerDoParallel(cl)
+#' 
+#' # Export objects required by the parameter generators in list 'funs'
+#' clusterExport(cl, c("SimLen", "params", "param.combos"))
+#' 
+#' # Run the driver in parallel mode
+#' con <- tmDriver(funs, major = nrow(param.combos), minor = 100, parallel = TRUE)
+#' 
+#' # Finish
+#' stopCluster(cl)
+#' 
 #' }
+#' 
+#' @importFrom foreach foreach %dopar% %:%
+#' @importFrom iterators icount
 #' 
 #' @export
 #' 
-tmDriver <- function(funs, majors=1, minors=1, silent=FALSE) {
+tmDriver <- function(funs, majors=1, minors=1, parallel=FALSE) {
+  
+  if (parallel &&
+      !requireNamespace("foreach", quietly=TRUE)) {
+    stop("Install the foreach package to run parallel simulations")
+  }
   
   tmRunArgs <- formals(tmRun)
   MandatoryIndices <- which( sapply(tmRunArgs, is.name) )  # args with no default
@@ -130,38 +157,79 @@ tmDriver <- function(funs, majors=1, minors=1, silent=FALSE) {
   
   if (length(majors) == 1) majors = 1:majors
   if (length(minors) == 1) minors = 1:minors
-  
+
+  if (parallel)
+    driver_parallel(funs, majors, minors)
+  else
+    driver_serial(funs, majors, minors)
+}
+
+
+driver_serial <- function(funs, majors, minors) {
+  browser()
   db.out <- NULL
   run.id <- 1
   
-  if (!silent) cat("Running simulations \n")
+  cat("Running simulations \n")
   for (major in majors) {
     for (minor in minors) {
-      if (!silent) cat(major, minor, "\n")
+      cat(major, minor, "\n")
       
-      params <- lapply(funs, 
-                       function(p) { 
-                         if (is.function(p)) p(major, minor) 
-                         else p
-                       })
-      
-      params$run.id <- run.id
-      
-      db.rep <- do.call(tmRun, params)
-      db.out <- combine_databases(db.out, db.rep)
-      tmdbClose(db.rep)
+      db.run <- do_run(funs, major, minor, run.id)
+      db.out <- combine_databases(db.out, db.run)
+      tmdbClose(db.run)
       
       run.id <- run.id + 1
     }
   }
-  if (!silent) cat("Finished \n")
+  cat("Finished \n")
   
   db.out
 }
 
 
+driver_parallel <- function(funs, majors, minors) {
+  nminor <- length(minors)
+  
+  dbs <- foreach (major = majors, i = icount(), .combine = c) %:%
+    foreach (minor = minors, j = icount()) %dopar% {
+      run.id = nminor * (i - 1) + j
+      do_run(funs, major, minor, run.id)
+    }
+
+  # The output database connections will be closed since they were 
+  # created in child processes, so re-open and combine them.
+  # 
+  db.out <- NULL
+  for (db in dbs) {
+    con <- tmdbOpen(db@dbname)
+    db.out <- combine_databases(db.out, con)
+    
+    # sometimes deleting the temp file fails
+    suppressWarnings(
+      tmdbClose(con, del=TRUE)
+    )
+  }
+  
+  db.out
+}
+
+
+do_run <- function(funs, major, minor, run.id) {
+  params <- lapply(funs, 
+                   function(p) { 
+                     if (is.function(p)) p(major, minor) 
+                     else p
+                   })
+  
+  params$run.id <- run.id
+  
+  do.call(tmRun, params)
+}
+
 combine_databases <- function(db1, db2) {
   newdb <- FALSE
+  
   if (is.null(db1)) {
     db1 <- RSQLite::dbConnect(RSQLite::SQLite(), tempfile())
     newdb <- TRUE

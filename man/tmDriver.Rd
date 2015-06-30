@@ -4,7 +4,7 @@
 \alias{tmDriver}
 \title{Runs simulations in batch mode.}
 \usage{
-tmDriver(funs, majors = 1, minors = 1, silent = FALSE)
+tmDriver(funs, majors = 1, minors = 1, parallel = FALSE)
 }
 \arguments{
 \item{funs}{A named list of generating functions, where the names correspond
@@ -54,18 +54,21 @@ param.combos <- expand.grid(
 # Simulation length as a global var
 SimLen <- 500
 
+# This example also assumes that there is an object 'spp.params'
+# in the global environment
+
 # The list of parameter generators, with list element names
 # corresonding to (abbreviated) tmRun argument names
 funs <- list(
   # Constant object for Spp argument
-  Spp = my.spp.params,
+  Spp = spp.params,
 
   # Function to generate initial cohort table.
   # Same behaviour over all simulations so the function
   # ignores major and minor arguments.
   #
   init = function(...) {
-    Nspp <- length(my.spp.params)
+    Nspp <- length(spp.params)
     data.frame(sp = 1:Nspp,
                age = sample(20:50, Nspp),
                height = runif(Nspp, 5, 10),
@@ -100,6 +103,22 @@ funs <- list(
 # Run the simulations, with 100 replicates for each parameter
 # combination
 con <- tmDriver(funs, major = nrow(param.combos), minor = 100)
+
+### Example of running the above in parallel (3 cores)
+
+# Create a cluster and register it
+library(doParallel)
+cl <- makeCluster(3)
+registerDoParallel(cl)
+
+# Export objects required by the parameter generators in list 'funs'
+clusterExport(cl, c("SimLen", "params", "param.combos"))
+
+# Run the driver in parallel mode
+con <- tmDriver(funs, major = nrow(param.combos), minor = 100, parallel = TRUE)
+
+# Finish
+stopCluster(cl)
 
 }
 }
