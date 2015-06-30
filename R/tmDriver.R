@@ -15,6 +15,12 @@
 #' run within each major level. However, an individual parameter generating 
 #' function is free to interpret these in any way, or ignore them completely.
 #' 
+#' If the \code{parallel} argument is \code{TRUE}, simulations will be run
+#' concurrently using the \code{foreach} package. To use this option, you must
+#' create and register a cluster prior to calling \code{tmDriver} and also 
+#' export any objects in the global environment which are referenced by 
+#' parameter generators. See the example code below.
+#' 
 #' @param funs A named list of generating functions, where the names correspond 
 #'   to \code{\link{tmRun}} argument names. Each function takes two integer 
 #'   parameters (major and minor run number) and returns an object appropriate 
@@ -32,6 +38,12 @@
 #' @param minors (integer) Either a single value for the number of minor 
 #'   increments or a vector of values. If a single value, \code{m}, it will be
 #'   treated as the sequence \code{1:m}.
+#'   
+#' @param parallel (logical) If TRUE, run the simulations in parallel using
+#'   the \code{foreach} package. See example.
+#'   
+#' @return A connection to a SQLite database containing the aggregated
+#'   simulation outputs.
 #'   
 #' @examples
 #' \dontrun{
