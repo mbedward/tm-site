@@ -192,7 +192,6 @@ tmDriver <- function(funs, majors=1, minors=1, parallel=FALSE) {
 
 
 driver_serial <- function(funs, majors, minors) {
-  browser()
   db.out <- NULL
   run.id <- 1
   
