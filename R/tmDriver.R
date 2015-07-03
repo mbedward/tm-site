@@ -176,13 +176,13 @@ tmDriver <- function(funs, majors=1, minors=1, parallel=FALSE) {
     else
       driver_serial(funs, majors, minors)
   
-  # Add indices
+  # Add indexes
   #
   RSQLite::dbGetQuery(db.out, 
                       "create index idxcyr on cohortyearly(RunID, SpeciesID, CohortID)")
   
   RSQLite::dbGetQuery(db.out,
-                      "create index idxcsum on cohortsummary(RunID, SpeciesID, CohortID")
+                      "create index idxcsum on cohortsummary(RunID, SpeciesID, CohortID)")
   
   RSQLite::dbGetQuery(db.out,
                       "create index idxcdat on commondata(RunID)")
