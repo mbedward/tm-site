@@ -19,6 +19,9 @@
 #' @importFrom dplyr %>%
 #' @importFrom ggplot2 ggplot aes facet_wrap geom_line labs theme theme_bw
 #' 
+#' @importFrom foreach foreach %dopar% %:%
+#' @importFrom iterators icount
+#' 
 #' @importFrom Rcpp sourceCpp
 #' @useDynLib woodland
 #' 

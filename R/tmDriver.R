@@ -115,6 +115,10 @@
 #' registerDoParallel(cl)
 #' 
 #' # Export objects required by the parameter generators in list 'funs'
+#' # (if doing this from within a function, add 'envir = environment()' to
+#' # the call to clusterExport so that objects within the surrounding
+#' # function will be found)
+#' #
 #' clusterExport(cl, c("SimLen", "params", "param.combos"))
 #' 
 #' # Run the driver in parallel mode
@@ -124,9 +128,6 @@
 #' stopCluster(cl)
 #' 
 #' }
-#' 
-#' @importFrom foreach foreach %dopar% %:%
-#' @importFrom iterators icount
 #' 
 #' @export
 #' 
@@ -202,7 +203,6 @@ driver_serial <- function(funs, majors, minors) {
       
       db.run <- do_run(funs, major, minor, run.id)
       db.out <- combine_databases(db.out, db.run)
-      tmdbClose(db.run)
       
       run.id <- run.id + 1
     }
@@ -222,18 +222,9 @@ driver_parallel <- function(funs, majors, minors) {
       do_run(funs, major, minor, run.id)
     }
 
-  # The output database connections will be closed since they were 
-  # created in child processes, so re-open and combine them.
-  # 
   db.out <- NULL
   for (db in dbs) {
-    con <- tmdbOpen(db@dbname)
     db.out <- combine_databases(db.out, con)
-    
-    # sometimes deleting the temp file fails
-    suppressWarnings(
-      tmdbClose(con, del=TRUE)
-    )
   }
   
   db.out
@@ -252,18 +243,60 @@ do_run <- function(funs, major, minor, run.id) {
   do.call(tmRun, params)
 }
 
+# Combine two databases.
+#
+# If db1 is NULL, we simply return db2.
+# If both connections are non-NULL, the contents of db2 are
+# inserted into db1 and db2 is closed and deleted.
+#
+# We avoid passing data through R by using an SQL 
+# attach / insert / detach workflow.
+#
 combine_databases <- function(db1, db2) {
-  newdb <- FALSE
+  # db1 is allowed to be null, but not db2
+  db2 <- ensure_open(db2)
   
   if (is.null(db1)) {
-    db1 <- RSQLite::dbConnect(RSQLite::SQLite(), tempfile())
-    newdb <- TRUE
+    db2
+  }
+  else {
+    db1 <- ensure_open(db1)
+    
+    sql <- paste("attach database \'", db2@dbname, "\' as db2", sep="")
+    RSQLite::dbGetQuery(db1, sql)
+    RSQLite::dbBegin(db1)
+    
+    tbls <- RSQLite::dbListTables(db2)
+    
+    for (tbl in tbls) {
+      sql <- paste("insert into ", tbl, " select * from db2.", tbl, sep="")
+      RSQLite::dbGetQuery(db1, sql)
+    }
+    
+    RSQLite::dbCommit(db1)
+    RSQLite::dbGetQuery(db1, "detach database db2")
+
+    # sometimes deleting the temp file fails
+    suppressWarnings(
+      tmdbClose(db2, deleteDB = TRUE)
+    )
+    
+    db1
+  }
+}
+
+# Ensure a database connection is open.
+# When running in parallel, we end up with many closed
+# connections which still point to valid files.
+#
+ensure_open <- function(db) {
+  if (is.null(db))
+    stop("db connection is NULL")
+  
+  # If the db connection is not NULL, but not open, then open it
+  if (!is.null(db) && !RSQLite::dbIsValid(db)) {
+    db <- RSQLite::dbConnect(RSQLite::SQLite(), db@dbname)
   }
   
-  for (tbl in RSQLite::dbListTables(db2)) {
-    dat <- RSQLite::dbReadTable(db2, tbl)
-    RSQLite::dbWriteTable(db1, tbl, dat, append=!newdb, overwrite=newdb)
-  }
-  
-  db1
+  db
 }

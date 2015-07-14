@@ -1,7 +1,7 @@
 Package: woodland
 Type: Package
 Title: A woodland stand simulation
-Version: 0.1.1
+Version: 0.1.2
 Date: 2015-07-02
 Authors@R: as.person(c(
     "Michael Bedward <michael.bedward@gmail.com> [aut, cre]",
