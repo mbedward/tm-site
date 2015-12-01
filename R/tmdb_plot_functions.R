@@ -73,7 +73,8 @@ tmdbPlot <- function(tmdb,
   }
   
   if (extra.sql != "") {
-    leading.and <- stringr::str_detect(extra.sql, stringr::ignore.case("^and "))
+    pattern <- stringr::regex("^and ", ignore_case = TRUE)
+    leading.and <- stringr::str_detect(extra.sql, pattern)
     if (!leading.and) extra.sql <- paste("AND", extra.sql, collapse = " ")
   }
   
