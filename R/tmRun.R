@@ -1221,6 +1221,7 @@ tmRun <- function (Spp,
           "flam prop: ", flammable.prop, "\n",
           "scheduled intensity: ", scheduled.fires[YEAR], "\n",
           "realized intensity: ", realized.intensity, "\n", 
+          "prop burnt: ", prop.burnt, "\n",
           sep="")
         
         cat(s)

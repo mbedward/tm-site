@@ -91,7 +91,9 @@ tmdbClose <- function (tmdb, deleteDB=FALSE)
 #' 
 #' Copies a database from its current location (possibly a temporary file)
 #' to the given destination file. After copying, the connection is closed 
-#' and the original file deleted.
+#' and the original file deleted. If the destination is the same as the 
+#' database file for the connection, a warning message is issued and the
+#' input connection is returned.
 #'
 #' @param tmdb an open database connection
 #' @param dest destination path
@@ -109,14 +111,20 @@ tmdbSave <- function (tmdb, dest, reconnect=FALSE)
   
   .ensureConnection(tmdb, is.open=TRUE)
   
-  file.copy(tmdb@dbname, dest, overwrite=TRUE)
-  tmdbClose(tmdb, delete=TRUE)
-  
-  if (reconnect) {
-    newCon <- RSQLite::dbConnect(RSQLite::SQLite(), dest)
+  if (dest == tmdb@dbname) {
+    warning("Destination is same as current database file - skipping copy")
+    invisible(tmdb)
+    
+  } else {
+    file.copy(tmdb@dbname, dest, overwrite=TRUE)
+    tmdbClose(tmdb, delete=TRUE)
+    
+    if (reconnect) {
+      newCon <- RSQLite::dbConnect(RSQLite::SQLite(), dest)
+    }
+    
+    invisible(newCon)
   }
-  
-  invisible(newCon)
 }
 
 # =============================================================================

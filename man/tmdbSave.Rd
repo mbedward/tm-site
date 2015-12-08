@@ -21,6 +21,8 @@ Invisibly returns a new connection (if reconnect is TRUE)
 \description{
 Copies a database from its current location (possibly a temporary file)
 to the given destination file. After copying, the connection is closed
-and the original file deleted.
+and the original file deleted. If the destination is the same as the
+database file for the connection, a warning message is issued and the
+input connection is returned.
 }
 

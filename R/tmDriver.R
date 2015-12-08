@@ -224,7 +224,7 @@ driver_parallel <- function(funs, majors, minors) {
 
   db.out <- NULL
   for (db in dbs) {
-    db.out <- combine_databases(db.out, con)
+    db.out <- combine_databases(db.out, db)
   }
   
   db.out
